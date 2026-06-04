@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node server.js)",
+      "WebFetch(domain:gen-x.co.jp)",
+      "Bash(curl -sSI -L --max-time 15 \"https://gen-x.co.jp/\")",
+      "Bash(node server.js stop)",
+      "PowerShell(taskkill /f /pid 40752)",
+      "PowerShell(node server.js)",
+      "Bash(node -c server.js)",
+      "Bash(node -e ' *)",
+      "Bash(ls -la \"C:\\\\Users\\\\tetsu\\\\OneDrive\\\\新規事業\\\\AI関連\\\\Claude code\\\\security-diagnosis\\\\\")",
+      "WebFetch(domain:security-diagnosis-production.up.railway.app)"
+    ]
+  }
+}
