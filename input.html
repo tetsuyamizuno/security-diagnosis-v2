@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>セキュリティ脆弱性診断【レポート作成】</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Noto+Serif+JP:wght@400;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap');
+
+  :root{
+    --bg:#f2f0eb;
+    --surface:#ffffff;
+    --surface2:#f8f7f3;
+    --border:#d8d3c8;
+    --border-strong:#b0a898;
+    --ink:#1a1a1a;
+    --ink2:#4a4540;
+    --ink3:#8a837a;
+    --teal:#1a7a6e;
+    --teal-light:#e8f4f2;
+    --amber:#c07820;
+    --amber-light:#fef4e4;
+    --red:#c03020;
+    --grad:linear-gradient(135deg,#1a7a6e,#1a5a8a);
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Noto Sans JP',sans-serif;
+    font-weight:300;
+    font-size:15px;
+    line-height:1.8;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ── HEADER ── */
+  .header{
+    background:var(--ink);
+    color:#f2f0eb;
+    padding:32px 48px;
+    display:flex;
+    align-items:flex-end;
+    gap:24px;
+    position:relative;
+    overflow:hidden;
+  }
+  .header::before{
+    content:"";
+    position:absolute;
+    right:-60px;top:-60px;
+    width:280px;height:280px;
+    border-radius:50%;
+    background:radial-gradient(circle,rgba(26,122,110,.35),transparent 70%);
+  }
+  .header-icon{
+    width:52px;height:52px;
+    background:var(--grad);
+    border-radius:12px;
+    display:grid;place-items:center;
+    flex:none;
+    position:relative;z-index:1;
+    box-shadow:0 6px 20px rgba(26,122,110,.4);
+  }
+  .header-icon svg{width:26px;height:26px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  .header-text{position:relative;z-index:1;}
+  .header-title{
+    font-family:'Noto Serif JP',serif;
+    font-size:22px;
+    font-weight:700;
+    letter-spacing:.02em;
+    line-height:1.3;
+  }
+  .header-title span{
+    background:var(--grad);
+    -webkit-background-clip:text;
+    background-clip:text;
+    -webkit-text-fill-color:transparent;
+  }
+  .header-sub{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;
+    letter-spacing:.2em;
+    text-transform:uppercase;
+    color:rgba(242,240,235,.45);
+    margin-top:4px;
+  }
+
+  /* ── LAYOUT ── */
+  .layout{
+    display:grid;
+    grid-template-columns:420px 1fr;
+    min-height:calc(100vh - 116px);
+  }
+
+  /* ── SIDEBAR ── */
+  .sidebar{
+    background:var(--ink);
+    color:#f2f0eb;
+    padding:36px 32px;
+    border-right:1px solid rgba(255,255,255,.06);
+  }
+  .sidebar-section{margin-bottom:36px;}
+  .sidebar-section:last-child{margin-bottom:0;}
+  .sidebar-label{
+    font-family:'Noto Sans JP',sans-serif;
+    font-size:15px;
+    font-weight:700;
+    letter-spacing:.04em;
+    text-transform:none;
+    color:rgba(242,240,235,.9);
+    margin-bottom:14px;
+    display:flex;align-items:center;gap:8px;
+  }
+  .sidebar-label::after{content:"";flex:1;height:1px;background:rgba(255,255,255,.08);}
+
+  /* Mode buttons */
+  .mode-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .mode-btn{
+    background:rgba(255,255,255,.05);
+    border:1px solid rgba(255,255,255,.1);
+    border-radius:8px;
+    padding:12px 10px;
+    cursor:pointer;
+    font-family:'Noto Sans JP',sans-serif;
+    color:rgba(242,240,235,.55);
+    font-size:12px;
+    text-align:center;
+    transition:.18s;
+    line-height:1.4;
+  }
+  .mode-btn .mb-title{font-weight:700;display:block;font-size:13px;margin-bottom:3px;}
+  .mode-btn .mb-sub{font-size:10px;color:rgba(242,240,235,.3);}
+  .mode-btn:hover{border-color:rgba(255,255,255,.2);}
+  .mode-btn.on.test{border-color:#1a7a6e;background:rgba(26,122,110,.18);color:#5ec4b8;}
+  .mode-btn.on.test .mb-sub{color:rgba(94,196,184,.6);}
+  .mode-btn.on.prod{border-color:var(--amber);background:rgba(192,120,32,.18);color:#f0b84a;}
+  .mode-btn.on.prod .mb-sub{color:rgba(240,184,74,.6);}
+  .mode-desc{font-size:11.5px;color:rgba(242,240,235,.42);line-height:1.65;margin-top:10px;}
+
+  /* Model select */
+  .sb-select{
+    width:100%;
+    background:#2a2a2a;
+    border:1px solid rgba(255,255,255,.2);
+    border-radius:8px;
+    padding:12px 14px;
+    color:#f2f0eb;
+    font-size:14px;
+    font-family:'Noto Sans JP',sans-serif;
+    appearance:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' stroke='rgba(242,240,235,0.6)' stroke-width='1.5' fill='none'/></svg>");
+    background-repeat:no-repeat;
+    background-position:right 12px center;
+    cursor:pointer;
+    transition:.18s;
+  }
+  .sb-select option{
+    background:#2a2a2a;
+    color:#f2f0eb;
+    font-size:14px;
+    padding:8px;
+  }
+  .sb-select:focus{outline:none;border-color:#1a7a6e;background-color:#1a3a36;}
+
+  /* Search toggle */
+  .search-toggle{
+    display:flex;align-items:center;justify-content:space-between;
+    background:rgba(255,255,255,.04);
+    border:1px solid rgba(255,255,255,.1);
+    border-radius:8px;
+    padding:12px 14px;
+  }
+  .st-text .st-title{font-size:12.5px;font-weight:500;}
+  .st-text .st-sub{font-size:10.5px;color:rgba(242,240,235,.38);margin-top:2px;line-height:1.5;}
+  .switch{position:relative;width:44px;height:24px;flex:none;cursor:pointer;}
+  .switch input{opacity:0;width:0;height:0;}
+  .switch .track{position:absolute;inset:0;background:rgba(255,255,255,.15);border-radius:24px;transition:.2s;}
+  .switch .track::before{content:"";position:absolute;width:18px;height:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s;opacity:.6;}
+  .switch input:checked + .track{background:#1a7a6e;}
+  .switch input:checked + .track::before{transform:translateX(20px);opacity:1;}
+  .switch input:disabled + .track{opacity:.5;cursor:not-allowed;}
+  .search-warn{font-size:10.5px;color:#f0b84a;margin-top:8px;display:none;line-height:1.55;}
+  .search-warn.show{display:block;}
+
+  /* Safety note */
+  .safety-note{
+    background:rgba(192,120,32,.1);
+    border:1px solid rgba(192,120,32,.25);
+    border-radius:8px;
+    padding:14px;
+    font-size:13px;
+    color:rgba(242,240,235,.6);
+    line-height:1.75;
+  }
+  .safety-note strong{color:#f0b84a;}
+
+  /* ── MAIN ── */
+  .main{background:var(--surface2);padding:36px 40px;}
+
+  .field-group{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:28px;
+    margin-bottom:20px;
+    box-shadow:0 1px 8px rgba(0,0,0,.04);
+  }
+  .field-group-title{
+    font-family:'Noto Serif JP',serif;
+    font-size:15px;
+    font-weight:600;
+    color:var(--ink);
+    margin-bottom:20px;
+    padding-bottom:12px;
+    border-bottom:1px solid var(--border);
+    display:flex;align-items:center;gap:8px;
+  }
+  .field-group-title .fg-num{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;
+    letter-spacing:.1em;
+    color:var(--teal);
+    background:var(--teal-light);
+    padding:2px 8px;
+    border-radius:4px;
+  }
+
+  .field{margin-bottom:18px;}
+  .field:last-child{margin-bottom:0;}
+  .field label{
+    display:block;
+    font-size:16px;
+    font-weight:700;
+    color:var(--ink);
+    margin-bottom:8px;
+  }
+  .field .hint{font-size:11px;color:var(--ink3);font-weight:300;margin-left:4px;}
+
+  input[type=url],input[type=text],select{
+    width:100%;
+    background:#ffffff;
+    border:2px solid #b0a898;
+    border-radius:8px;
+    padding:13px 15px;
+    color:var(--ink);
+    font-size:16px;
+    font-family:'Noto Sans JP',sans-serif;
+    transition:background .2s, border-color .2s, box-shadow .2s;
+    appearance:none;
+  }
+  input[type=url]::placeholder,input[type=text]::placeholder{color:#b0a898;}
+  input[type=url]:hover,input[type=text]:hover,select:hover{border-color:#6a6358;}
+  input[type=url]:focus,input[type=text]:focus,select:focus{
+    outline:none;
+    border-color:var(--teal);
+    box-shadow:0 0 0 3px rgba(26,122,110,.15);
+  }
+  /* 入力済み：メインエリアのみティール系の薄い背景色（サイドバーは除外） */
+  .main input[type=url].has-value,
+  .main input[type=text].has-value,
+  .main select.has-value,
+  .own-btn.on{
+    background:#e8f4f2;
+    border-color:var(--teal);
+  }
+  select{
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' stroke='%234a4540' stroke-width='1.6' fill='none'/></svg>");
+    background-repeat:no-repeat;
+    background-position:right 12px center;
+    cursor:pointer;
+  }
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  @media(max-width:600px){.row2{grid-template-columns:1fr;}}
+
+  /* Ownership toggle */
+  .own-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .own-btn{
+    background:#ffffff;
+    border:2px solid #b0a898;
+    border-radius:8px;
+    padding:13px 15px;
+    cursor:pointer;
+    text-align:left;
+    font-family:'Noto Sans JP',sans-serif;
+    color:var(--ink3);
+    transition:background .2s, border-color .2s;
+  }
+  .own-btn .ob-title{font-size:16px;font-weight:700;display:block;color:var(--ink);}
+  .own-btn .ob-sub{font-size:13px;margin-top:3px;display:block;line-height:1.5;}
+  .own-btn:hover{border-color:#6a6358;}
+  .own-btn.on{border-color:var(--teal);background:#e8f4f2;color:var(--teal);}
+  .own-btn.on .ob-title{color:var(--teal);}
+  .own-btn.on .ob-sub{color:rgba(26,122,110,.7);}
+
+  /* RUN BUTTON */
+  .run-wrap{margin-top:6px;}
+  .run-btn{
+    width:100%;
+    background:var(--grad);
+    color:#fff;
+    border:none;
+    border-radius:10px;
+    padding:18px;
+    font-size:16px;
+    font-weight:700;
+    font-family:'Noto Sans JP',sans-serif;
+    cursor:pointer;
+    transition:.18s;
+    box-shadow:0 6px 24px rgba(26,122,110,.3);
+    letter-spacing:.02em;
+  }
+  .run-btn:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(26,122,110,.4);}
+  .run-btn:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none;}
+
+  /* STATUS */
+  .status{
+    display:none;
+    align-items:center;gap:14px;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:18px 22px;
+    margin-top:16px;
+    font-size:13.5px;
+    color:var(--ink2);
+  }
+  .status.show{display:flex;}
+  .spin{
+    width:20px;height:20px;
+    border:2.5px solid var(--border);
+    border-top-color:var(--teal);
+    border-radius:50%;
+    animation:spin .8s linear infinite;
+    flex:none;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* ERROR */
+  .err{
+    display:none;
+    background:#fef2f0;
+    border:1px solid rgba(192,48,32,.3);
+    border-radius:10px;
+    padding:16px 20px;
+    color:var(--red);
+    font-size:13px;
+    margin-top:16px;
+    line-height:1.7;
+  }
+  .err.show{display:block;}
+
+  /* ── REPORT AREA ── */
+  #report-area{display:none;}
+  #report-area.show{display:block;}
+
+  .report-header{
+    background:var(--ink);
+    color:#f2f0eb;
+    padding:20px 40px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+  }
+  .report-header-title{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    color:rgba(242,240,235,.5);
+  }
+  .pdf-btn{
+    background:var(--grad);
+    color:#fff;
+    border:none;
+    border-radius:8px;
+    padding:10px 22px;
+    font-size:13px;
+    font-weight:700;
+    font-family:'Noto Sans JP',sans-serif;
+    cursor:pointer;
+    transition:.18s;
+    display:flex;align-items:center;gap:8px;
+  }
+  .pdf-btn:hover{opacity:.88;transform:translateY(-1px);}
+  .pdf-btn svg{width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+
+  /* ── REPORT CONTENT（freeeトンマナ・本文大きく） ── */
+  .report-wrap{background:#f6f7f4;padding:0;}
+
+  .rp-cover{
+    background:linear-gradient(160deg,#0d1b2a,#13263a);
+    color:#f6f7f4;
+    padding:52px 56px;
+    position:relative;overflow:hidden;
+  }
+  .rp-cover::before{
+    content:"";position:absolute;inset:0;
+    background-image:radial-gradient(circle at 80% 15%,rgba(42,161,152,.18),transparent 45%),
+    linear-gradient(rgba(255,255,255,.02) 1px,transparent 1px);
+    background-size:auto,100% 36px;
+  }
+  .rp-cover-top{
+    display:flex;justify-content:space-between;
+    border-bottom:1px solid rgba(255,255,255,.15);
+    padding-bottom:16px;margin-bottom:30px;
+    position:relative;z-index:2;
+  }
+  .rp-mono{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:rgba(246,247,244,.5);}
+  .rp-kick{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.28em;color:#2aa198;text-transform:uppercase;margin-bottom:18px;position:relative;z-index:2;}
+  .rp-title{font-family:'Noto Serif JP',serif;font-size:clamp(26px,4vw,46px);line-height:1.25;position:relative;z-index:2;}
+  .rp-title b{display:block;font-weight:700;}
+  .rp-dom{font-family:'JetBrains Mono',monospace;font-size:clamp(13px,2vw,19px);color:#2aa198;margin-top:12px;position:relative;z-index:2;}
+  .rp-sub{margin-top:16px;max-width:560px;color:rgba(246,247,244,.6);line-height:1.9;font-size:14px;position:relative;z-index:2;}
+  .rp-meta{border-top:1px solid rgba(255,255,255,.15);padding-top:20px;display:flex;flex-wrap:wrap;gap:32px;position:relative;z-index:2;margin-top:26px;}
+  .rp-meta div{display:flex;flex-direction:column;gap:4px;}
+  .rp-meta dt{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:rgba(246,247,244,.4);}
+  .rp-meta dd{font-size:13.5px;color:rgba(246,247,244,.88);font-weight:500;}
+
+  .rp-scores{background:#13263a;display:flex;border-top:1px solid rgba(255,255,255,.07);}
+  .rp-score{flex:1;padding:18px 26px;display:flex;align-items:center;gap:12px;border-right:1px solid rgba(255,255,255,.07);}
+  .rp-score:last-child{border-right:none;}
+  .rp-dot{width:10px;height:10px;border-radius:50%;flex:none;}
+  .rp-dot.h{background:#cf4036;box-shadow:0 0 9px #cf4036;}
+  .rp-dot.m{background:#c08327;box-shadow:0 0 9px #c08327;}
+  .rp-dot.l{background:#2f8a5b;box-shadow:0 0 9px #2f8a5b;}
+  .rp-score .rp-lab{font-size:13px;color:rgba(246,247,244,.55);}
+  .rp-score .rp-num{font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:700;margin-left:auto;}
+
+  /* 本文エリア — フォントを大きく */
+  .rp-body{background:#f6f7f4;padding:56px 52px 80px;}
+  .rp-note{border-left:3px solid #1f7a8c;background:rgba(31,122,140,.07);padding:20px 26px;margin-bottom:22px;font-size:15px;color:#52606d;line-height:1.9;}
+  .rp-note b{color:#152230;font-weight:700;}
+  .rp-note.warn{border-left-color:#cf4036;background:rgba(207,64,54,.08);}
+  .rp-note.gold{border-left-color:#c08327;background:rgba(192,131,39,.10);}
+  .rp-sn{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.22em;color:#52606d;text-transform:uppercase;margin-bottom:8px;}
+  .rp-body h2{font-family:'Noto Serif JP',serif;font-weight:600;font-size:24px;line-height:1.38;padding-bottom:13px;border-bottom:2px solid #152230;margin-bottom:28px;color:#152230;}
+  .rp-risk{margin-bottom:76px;}
+  .rp-card{border:1px solid #d3d8cf;background:#eceee7;}
+  .rp-ch{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:22px 30px;border-bottom:1px solid #d3d8cf;background:#f6f7f4;}
+  .rp-ct{font-family:'Noto Sans JP',sans-serif;font-weight:700;font-size:17px;line-height:1.45;color:#152230;}
+  .rp-badge{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;padding:6px 13px;border-radius:2px;white-space:nowrap;text-transform:uppercase;flex:none;}
+  .rp-badge.h{background:rgba(207,64,54,.1);color:#cf4036;border:1px solid rgba(207,64,54,.32);}
+  .rp-badge.m{background:rgba(192,131,39,.12);color:#c08327;border:1px solid rgba(192,131,39,.32);}
+  .rp-badge.l{background:rgba(47,138,91,.12);color:#2f8a5b;border:1px solid rgba(47,138,91,.32);}
+  .rp-cb{padding:30px;}
+
+  /* 本文の文字を大きく */
+  .rp-body p{font-size:16px;line-height:2.0;margin:0 0 16px;color:#152230;}
+  .rp-body ul{list-style:none;display:flex;flex-direction:column;gap:9px;margin-bottom:16px;}
+  .rp-body ul li{font-size:16px;line-height:1.85;padding-left:22px;position:relative;color:#152230;}
+  .rp-body ul li::before{content:"—";position:absolute;left:0;color:#52606d;font-family:'JetBrains Mono',monospace;}
+  .rp-body ol{list-style:none;counter-reset:r;display:flex;flex-direction:column;gap:10px;margin-bottom:16px;}
+  .rp-body ol li{counter-increment:r;font-size:16px;line-height:1.85;padding-left:34px;position:relative;color:#152230;}
+  .rp-body ol li::before{content:counter(r,decimal-leading-zero);position:absolute;left:0;top:1px;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:#1f7a8c;}
+  .rp-body code{font-family:'JetBrains Mono',monospace;font-size:13px;background:#e2e5dc;padding:2px 6px;border-radius:2px;}
+  .rp-body strong{font-weight:700;color:#0f1a24;}
+
+  .rp-table{width:100%;border-collapse:collapse;font-size:15px;background:#f6f7f4;border:1px solid #d3d8cf;margin:16px 0;}
+  .rp-table thead th{text-align:left;padding:13px 16px;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#52606d;border-bottom:2px solid #152230;}
+  .rp-table tbody td{padding:13px 16px;border-bottom:1px solid #d3d8cf;color:#152230;font-size:15px;}
+  .rp-table tbody tr:last-child td{border-bottom:none;}
+  .rp-table .ph{font-weight:700;color:#cf4036;}
+  .rp-table .pm{font-weight:600;color:#c08327;}
+  .rp-table .pl{color:#2f8a5b;}
+
+  .rp-footer-bar{background:linear-gradient(160deg,#0d1b2a,#13263a);color:rgba(246,247,244,.4);padding:26px 52px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.04em;}
+
+  @media print{
+    .header,.layout,.report-header{display:none!important;}
+    #report-area{display:block!important;}
+    .rp-body{padding:32px;}
+  }
+
+  footer{
+    text-align:center;
+    padding:24px;
+    color:var(--ink3);
+    font-family:'JetBrains Mono',monospace;
+    font-size:10.5px;
+    letter-spacing:.06em;
+    border-top:1px solid var(--border);
+    background:var(--surface);
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+  </div>
+  <div class="header-text">
+    <div class="header-title">セキュリティ脆弱性診断 <span>【レポート作成】</span></div>
+    <div class="header-sub">OWASP Top 10 準拠 / 非侵襲レビュー / Claude Code 連携版 C</div>
+  </div>
+</div>
+
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Anthropic APIキー</div>
+      <div style="position:relative;">
+        <input type="password" class="sb-select" id="apiKey" placeholder="sk-ant-..." style="padding-right:40px;font-family:'JetBrains Mono',monospace;font-size:11.5px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#f2f0eb;">
+        <button type="button" id="toggleKey" title="表示/非表示" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:0;opacity:.5;color:#f2f0eb;font-size:14px;">👁</button>
+      </div>
+      <p style="font-size:10.5px;color:rgba(242,240,235,.35);margin-top:7px;line-height:1.6;">ブラウザのlocalStorageに保存されます。サーバーには送信時のみ使用します。</p>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">使用モデル</div>
+      <select class="sb-select" id="model">
+        <option value="claude-sonnet-4-6" selected>Claude Sonnet 4.6 — バランス推奨</option>
+        <option value="claude-opus-4-5-20251101">Claude Opus 4.5 — 最高精度</option>
+        <option value="claude-opus-4-7">Claude Opus 4.7</option>
+        <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 — 高速</option>
+      </select>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Deep Research</div>
+      <div class="safety-note" style="background:rgba(26,122,110,.12);border-color:rgba(26,122,110,.3);">
+        <strong style="color:#5ec4b8;">常時オン</strong><span style="color:rgba(242,240,235,.6);font-size:13px;"> — 最新CVE・公的統計・実在事例をWeb検索で裏取りします。数分かかることがあります。</span>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">サーバー接続先</div>
+      <select class="sb-select" id="endpointSelect" style="font-family:'JetBrains Mono',monospace;font-size:12px;background:#2a2a2a;border:1px solid rgba(255,255,255,.2);color:#f2f0eb;">
+        <option value="http://localhost:3001">Local（localhost:3001）</option>
+        <option value="https://security-diagnosis-production.up.railway.app">Railway</option>
+        <option value="https://security-diagnosis.tetsuya-mizuno.workers.dev">Cloudflare Workers</option>
+        <option value="custom">新規（URLを入力）</option>
+      </select>
+      <input type="text" class="sb-select" id="endpointUrl"
+        placeholder="https://..."
+        style="display:none;margin-top:8px;font-family:'JetBrains Mono',monospace;font-size:12px;background:#2a2a2a;border:1px solid rgba(255,255,255,.2);color:#f2f0eb;">
+      <p id="endpointNote" style="font-size:11px;color:rgba(242,240,235,.35);margin-top:6px;line-height:1.6;">
+        http://localhost:3001
+      </p>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">注意事項</div>
+      <div class="safety-note">
+        <strong>このツールは攻撃しません。</strong>公開情報をもとにAIがリスクを整理する教育・防御目的のレビューです。
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main" id="main-area">
+
+    <!-- INPUT FORM -->
+    <div id="form-area">
+      <!-- STEP 01 -->
+      <div class="field-group">
+        <div class="field-group-title">
+          <span class="fg-num">STEP 01</span>
+          診断対象のURL
+        </div>
+        <div class="field">
+          <label>診断するサイト / アプリのURL</label>
+          <input type="url" id="targetUrl" placeholder="https://example.com">
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label>これは誰のサイト / アプリですか？</label>
+          <div class="own-grid" id="ownership">
+            <button type="button" data-val="self" class="own-btn">
+              <span class="ob-title">自社のもの</span>
+              <span class="ob-sub">改善提案中心の実務レポート</span>
+            </button>
+            <button type="button" data-val="third_party" class="own-btn">
+              <span class="ob-title">他社のもの</span>
+              <span class="ob-sub">教育・防御目的（免責付き）</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 02 -->
+      <div class="field-group">
+        <div class="field-group-title">
+          <span class="fg-num">STEP 02</span>
+          診断対象の補足メモ
+          <span style="font-size:11px;font-weight:300;color:var(--ink3);margin-left:4px;">（任意・選ぶと精度が上がります）</span>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label>サイト / アプリの種類</label>
+            <select id="noteType">
+              <option value="">選択してください…</option>
+              <option value="コーポレートサイト（会社案内中心の情報発信サイト）">コーポレート / 情報発信サイト</option>
+              <option value="ECサイト（オンラインで商品を販売するサイト）">ECサイト（通販）</option>
+              <option value="会員制サービス（ログインして使うWebサービス）">会員制Webサービス</option>
+              <option value="SaaS（クラウドで提供する業務アプリ）">SaaS / 業務アプリ</option>
+              <option value="会計・金融系サービス（口座やお金を扱うサービス）">会計・金融系サービス</option>
+              <option value="メディア／ブログ（記事を掲載するサイト）">メディア / ブログ</option>
+              <option value="予約・問い合わせ系サイト（フォームが中心のサイト）">予約・問い合わせ系サイト</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>扱うデータ</label>
+            <select id="noteData">
+              <option value="">選択してください…</option>
+              <option value="決済・クレジットカード情報を扱う">決済・カード情報を扱う</option>
+              <option value="氏名や住所などの個人情報を扱う">個人情報を扱う</option>
+              <option value="ログインID・パスワードのみ扱う">ログイン情報のみ扱う</option>
+              <option value="財務・取引などの機微なビジネスデータを扱う">財務・取引データを扱う</option>
+              <option value="特に機微なデータは扱わない（公開情報中心）">機微なデータは特になし</option>
+            </select>
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label>おおよその規模</label>
+            <select id="noteScale">
+              <option value="">選択してください…</option>
+              <option value="個人〜小規模（利用者は数百人程度まで）">個人〜小規模</option>
+              <option value="中規模（利用者は数千〜数万人程度）">中規模</option>
+              <option value="大規模（利用者は数十万人以上）">大規模</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>ログイン / 決済機能</label>
+            <select id="noteLogin">
+              <option value="">選択してください…</option>
+              <option value="ログイン機能あり・決済機能あり">ログインあり・決済あり</option>
+              <option value="ログイン機能あり・決済機能なし">ログインあり・決済なし</option>
+              <option value="ログイン機能なし・決済機能なし">ログインなし・決済なし</option>
+            </select>
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label>その他の補足 <span class="hint">（任意）</span></label>
+          <input type="text" id="noteFree" placeholder="例：大手銀行と口座連携あり、海外展開予定">
+        </div>
+      </div>
+
+      <!-- RUN -->
+      <div class="run-wrap">
+        <button class="run-btn" id="runBtn">レポートを生成する</button>
+      </div>
+
+      <div class="status" id="status">
+        <div class="spin"></div>
+        <span id="statusText">診断を実行しています…（しばらくお待ちください）</span>
+      </div>
+      <div class="err" id="err"></div>
+
+      <!-- 生成完了後に表示するボタン -->
+      <div id="openReportWrap" style="display:none;margin-top:20px;text-align:center;">
+        <div style="background:#e8f4f2;border:1px solid #1a7a6e;border-radius:10px;padding:20px 24px;margin-bottom:12px;">
+          <div style="font-size:18px;font-weight:700;color:#1a7a6e;margin-bottom:8px;">✅ レポートの生成が完了しました</div>
+          <div style="font-size:14px;color:#4a4540;margin-bottom:16px;">下のボタンを押してレポートを開いてください</div>
+          <button id="openReportBtn" class="run-btn" style="font-size:17px;padding:16px 32px;">
+            📄 レポートを新しいタブで開く
+          </button>
+        </div>
+        <div style="font-size:12px;color:#8a837a;">開いたタブ内の「PDFで保存」ボタンでPDF出力できます</div>
+      </div>
+
+    </div>
+
+  </main>
+</div>
+
+<footer>セキュリティ脆弱性診断【レポート作成】構成C — Node.jsサーバー連携版 / OWASP Top 10 準拠</footer>
+
+<script>
+// ── APIキー ──
+const apiKeyEl = document.getElementById('apiKey');
+const toggleKeyBtn = document.getElementById('toggleKey');
+try { const k = localStorage.getItem('diag_apikey'); if (k) apiKeyEl.value = k; } catch(e){}
+apiKeyEl.addEventListener('change', () => {
+  try { localStorage.setItem('diag_apikey', apiKeyEl.value.trim()); } catch(e){}
+});
+apiKeyEl.addEventListener('blur', () => {
+  try { localStorage.setItem('diag_apikey', apiKeyEl.value.trim()); } catch(e){}
+});
+toggleKeyBtn.addEventListener('click', () => {
+  apiKeyEl.type = apiKeyEl.type === 'password' ? 'text' : 'password';
+});
+
+// ── エンドポイントURL（プルダウン） ──
+const endpointSelect = document.getElementById('endpointSelect');
+const endpointCustom = document.getElementById('endpointUrl');
+const endpointNote   = document.getElementById('endpointNote');
+
+const ENDPOINTS = {
+  'http://localhost:3001': 'http://localhost:3001',
+  'https://security-diagnosis-production.up.railway.app': 'https://security-diagnosis-production.up.railway.app',
+  'https://security-diagnosis.tetsuya-mizuno.workers.dev': 'https://security-diagnosis.tetsuya-mizuno.workers.dev',
+};
+
+function getEndpointUrl() {
+  if (endpointSelect.value === 'custom') {
+    return endpointCustom.value.trim() || 'http://localhost:3001';
+  }
+  return endpointSelect.value;
+}
+
+function updateEndpointUI() {
+  const isCustom = endpointSelect.value === 'custom';
+  endpointCustom.style.display = isCustom ? 'block' : 'none';
+  endpointNote.textContent = isCustom ? '' : getEndpointUrl();
+  try { localStorage.setItem('diag_endpoint', getEndpointUrl()); } catch(e){}
+}
+
+// 保存済み値を復元
+try {
+  const saved = localStorage.getItem('diag_endpoint');
+  if (saved) {
+    if (ENDPOINTS[saved]) {
+      endpointSelect.value = saved;
+    } else if (saved) {
+      endpointSelect.value = 'custom';
+      endpointCustom.value = saved;
+    }
+  }
+} catch(e){}
+updateEndpointUI();
+
+endpointSelect.addEventListener('change', updateEndpointUI);
+endpointCustom.addEventListener('blur', updateEndpointUI);
+
+// ── 入力済みクラス制御（白→ティール色）──
+function updateHasValue(el) {
+  if (el.value && el.value.trim() !== '') {
+    el.classList.add('has-value');
+  } else {
+    el.classList.remove('has-value');
+  }
+}
+// メインエリアの入力欄のみ対象（サイドバーの sb-select は除外）
+document.querySelectorAll('.main input[type=url], .main input[type=text], .main select').forEach(el => {
+  updateHasValue(el);
+  el.addEventListener('input',  () => updateHasValue(el));
+  el.addEventListener('change', () => updateHasValue(el));
+});
+
+// ── モード・検索トグルは廃止（常時 Deep Research）──
+
+// ── 所有区分 ──
+let ownership = '';
+document.querySelectorAll('#ownership .own-btn').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('#ownership .own-btn').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    ownership = b.dataset.val;
+  });
+});
+
+// ── 設定復元 ──
+try {
+  const mdl = localStorage.getItem('diag_model');
+  if (mdl) {
+    const modelEl = document.getElementById('model');
+    // 保存値が現在の選択肢に存在する場合のみ復元
+    const exists = Array.from(modelEl.options).some(o => o.value === mdl);
+    if (exists) {
+      modelEl.value = mdl;
+    } else {
+      // 存在しない場合はデフォルト（Sonnet）にリセット
+      modelEl.value = 'claude-sonnet-4-6';
+      localStorage.setItem('diag_model', 'claude-sonnet-4-6');
+    }
+  }
+} catch(e) {}
+
+document.getElementById('model').addEventListener('change', () => {
+  try { localStorage.setItem('diag_model', document.getElementById('model').value); } catch(e){}
+});
+
+// ── 実行 ──
+const runBtn = document.getElementById('runBtn');
+const statusEl = document.getElementById('status');
+const statusText = document.getElementById('statusText');
+const errEl = document.getElementById('err');
+
+runBtn.addEventListener('click', async () => {
+  const url = document.getElementById('targetUrl').value.trim();
+  if (!apiKeyEl.value.trim()) { errEl.textContent = 'APIキーを入力してください。'; errEl.classList.add('show'); return; }
+  if (!url) { errEl.textContent = 'URLを入力してください。'; errEl.classList.add('show'); return; }
+  if (!ownership) { errEl.textContent = '「自社のもの」か「他社のもの」を選択してください。'; errEl.classList.add('show'); return; }
+  errEl.classList.remove('show');
+  runBtn.disabled = true;
+  statusEl.classList.add('show');
+  statusText.textContent = '🔍 Deep Research 実行中… CVE・公的統計・実在事例をWeb検索で調査しています（数分かかります）';
+
+  const noteParts = [
+    document.getElementById('noteType').value,
+    document.getElementById('noteData').value,
+    document.getElementById('noteScale').value,
+    document.getElementById('noteLogin').value,
+    document.getElementById('noteFree').value.trim()
+  ].filter(v => v);
+  const notes = noteParts.join('／');
+
+  try {
+    const res = await fetch(getEndpointUrl() + '/diagnose', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url, ownership,
+        ownershipLabel: ownership === 'self' ? '自社のサイト/アプリ' : '他社のサイト/アプリ',
+        notes: notes || '（なし）',
+        model: document.getElementById('model').value,
+        apiKey: apiKeyEl.value.trim()
+      })
+    });
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error(`サーバーエラー（${res.status}）: ${t.slice(0,200)}`);
+    }
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    if (data.isHtml) {
+      // ── HTML出力：ボタンを表示してユーザーが押したときに開く ──
+      const blob = new Blob([data.report], { type: 'text/html; charset=utf-8' });
+      const blobUrl = URL.createObjectURL(blob);
+
+      const wrap = document.getElementById('openReportWrap');
+      const btn  = document.getElementById('openReportBtn');
+      wrap.style.display = 'block';
+
+      btn.onclick = () => {
+        const tab = window.open(blobUrl, '_blank');
+        if (!tab) {
+          // ポップアップ許可されていない場合はダウンロード
+          const a = document.createElement('a');
+          a.href = blobUrl;
+          a.download = `security-report-${new Date().toISOString().slice(0,10)}.html`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        }
+        // 1分後にBlob解放
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      };
+
+    } else {
+      // ── Markdown出力（フォールバック）：テキスト表示 ──
+      const pre = document.createElement('pre');
+      pre.style.cssText = 'white-space:pre-wrap;font-size:13px;padding:20px;background:#f8f7f3;border:1px solid #ccc;border-radius:8px;margin-top:16px;';
+      pre.textContent = data.report;
+      document.getElementById('form-area').appendChild(pre);
+    }
+
+  } catch(e) {
+    errEl.textContent = e.message || '通信エラーが発生しました。server.jsが起動しているか確認してください。';
+    errEl.classList.add('show');
+  } finally {
+    runBtn.disabled = false;
+    statusEl.classList.remove('show');
+  }
+});
+</script>
+</body>
+</html>

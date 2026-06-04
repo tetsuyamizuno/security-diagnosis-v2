@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>セキュリティ脆弱性診断【シンプル版】</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Noto+Serif+JP:wght@400;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap');
+
+  :root{
+    --bg:#f2f0eb;
+    --surface:#ffffff;
+    --surface2:#f8f7f3;
+    --border:#d8d3c8;
+    --border-strong:#b0a898;
+    --ink:#1a1a1a;
+    --ink2:#4a4540;
+    --ink3:#8a837a;
+    --teal:#1a7a6e;
+    --teal-light:#e8f4f2;
+    --amber:#c07820;
+    --red:#c03020;
+    --grad:linear-gradient(135deg,#1a5a8a,#1a3a6a);
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Noto Sans JP',sans-serif;
+    font-weight:300;
+    font-size:15px;
+    line-height:1.8;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ── HEADER ── */
+  .header{
+    background:var(--ink);
+    color:#f2f0eb;
+    padding:32px 48px;
+    display:flex;
+    align-items:flex-end;
+    gap:24px;
+    position:relative;
+    overflow:hidden;
+  }
+  .header::before{
+    content:"";
+    position:absolute;
+    right:-60px;top:-60px;
+    width:280px;height:280px;
+    border-radius:50%;
+    background:radial-gradient(circle,rgba(26,90,138,.35),transparent 70%);
+  }
+  .header-icon{
+    width:52px;height:52px;
+    background:var(--grad);
+    border-radius:12px;
+    display:grid;place-items:center;
+    flex:none;
+    position:relative;z-index:1;
+    box-shadow:0 6px 20px rgba(26,90,138,.4);
+  }
+  .header-icon svg{width:26px;height:26px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  .header-text{position:relative;z-index:1;}
+  .header-title{
+    font-family:'Noto Serif JP',serif;
+    font-size:22px;
+    font-weight:700;
+    letter-spacing:.02em;
+    line-height:1.3;
+  }
+  .header-title span{
+    background:var(--grad);
+    -webkit-background-clip:text;
+    background-clip:text;
+    -webkit-text-fill-color:transparent;
+  }
+  .header-badge{
+    display:inline-block;
+    background:rgba(26,90,138,.3);
+    border:1px solid rgba(26,90,138,.5);
+    color:#7eb8e8;
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;
+    letter-spacing:.12em;
+    padding:3px 10px;
+    border-radius:4px;
+    margin-left:10px;
+    vertical-align:middle;
+  }
+  .header-sub{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;
+    letter-spacing:.2em;
+    text-transform:uppercase;
+    color:rgba(242,240,235,.45);
+    margin-top:4px;
+  }
+
+  /* ── LAYOUT ── */
+  .layout{
+    display:grid;
+    grid-template-columns:420px 1fr;
+    min-height:calc(100vh - 116px);
+  }
+
+  /* ── SIDEBAR ── */
+  .sidebar{
+    background:var(--ink);
+    color:#f2f0eb;
+    padding:36px 32px;
+    border-right:1px solid rgba(255,255,255,.06);
+  }
+  .sidebar-section{margin-bottom:36px;}
+  .sidebar-section:last-child{margin-bottom:0;}
+  .sidebar-label{
+    font-family:'Noto Sans JP',sans-serif;
+    font-size:15px;
+    font-weight:700;
+    letter-spacing:.04em;
+    color:rgba(242,240,235,.9);
+    margin-bottom:14px;
+    display:flex;align-items:center;gap:8px;
+  }
+  .sidebar-label::after{content:"";flex:1;height:1px;background:rgba(255,255,255,.08);}
+
+  .sb-select{
+    width:100%;
+    background:#2a2a2a;
+    border:1px solid rgba(255,255,255,.2);
+    border-radius:8px;
+    padding:12px 14px;
+    color:#f2f0eb;
+    font-size:14px;
+    font-family:'Noto Sans JP',sans-serif;
+    appearance:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' stroke='rgba(242,240,235,0.6)' stroke-width='1.5' fill='none'/></svg>");
+    background-repeat:no-repeat;
+    background-position:right 12px center;
+    cursor:pointer;
+    transition:.18s;
+  }
+  .sb-select option{background:#2a2a2a;color:#f2f0eb;font-size:14px;padding:8px;}
+  .sb-select:focus{outline:none;border-color:#1a5a8a;background-color:#1a2a3a;}
+
+  .safety-note{
+    background:rgba(26,90,138,.12);
+    border:1px solid rgba(26,90,138,.3);
+    border-radius:8px;
+    padding:14px;
+    font-size:13px;
+    color:rgba(242,240,235,.6);
+    line-height:1.75;
+  }
+  .safety-note strong{color:#7eb8e8;}
+
+  /* ── MAIN ── */
+  .main{background:var(--surface2);padding:36px 40px;}
+
+  .field-group{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:28px;
+    margin-bottom:20px;
+    box-shadow:0 1px 8px rgba(0,0,0,.04);
+  }
+  .field-group-title{
+    font-family:'Noto Serif JP',serif;
+    font-size:15px;
+    font-weight:600;
+    color:var(--ink);
+    margin-bottom:20px;
+    padding-bottom:12px;
+    border-bottom:1px solid var(--border);
+    display:flex;align-items:center;gap:8px;
+  }
+  .field-group-title .fg-num{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;
+    letter-spacing:.1em;
+    color:#1a5a8a;
+    background:#e8f0f8;
+    padding:2px 8px;
+    border-radius:4px;
+  }
+
+  .field{margin-bottom:18px;}
+  .field:last-child{margin-bottom:0;}
+  .field label{
+    display:block;
+    font-size:16px;
+    font-weight:700;
+    color:var(--ink);
+    margin-bottom:8px;
+  }
+
+  input[type=url],input[type=text],select{
+    width:100%;
+    background:#ffffff;
+    border:2px solid #b0a898;
+    border-radius:8px;
+    padding:13px 15px;
+    color:var(--ink);
+    font-size:16px;
+    font-family:'Noto Sans JP',sans-serif;
+    transition:background .2s, border-color .2s, box-shadow .2s;
+    appearance:none;
+  }
+  input[type=url]::placeholder,input[type=text]::placeholder{color:#b0a898;}
+  input[type=url]:hover,input[type=text]:hover,select:hover{border-color:#6a6358;}
+  input[type=url]:focus,input[type=text]:focus,select:focus{
+    outline:none;
+    border-color:#1a5a8a;
+    box-shadow:0 0 0 3px rgba(26,90,138,.15);
+  }
+  .main input[type=url].has-value,
+  .main input[type=text].has-value,
+  .main select.has-value,
+  .own-btn.on{
+    background:#e8f0f8;
+    border-color:#1a5a8a;
+  }
+  select{
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' stroke='%234a4540' stroke-width='1.6' fill='none'/></svg>");
+    background-repeat:no-repeat;
+    background-position:right 12px center;
+    cursor:pointer;
+  }
+
+  /* Ownership toggle */
+  .own-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .own-btn{
+    background:#ffffff;
+    border:2px solid #b0a898;
+    border-radius:8px;
+    padding:13px 15px;
+    cursor:pointer;
+    text-align:left;
+    font-family:'Noto Sans JP',sans-serif;
+    color:var(--ink3);
+    transition:background .2s, border-color .2s;
+  }
+  .own-btn .ob-title{font-size:16px;font-weight:700;display:block;color:var(--ink);}
+  .own-btn .ob-sub{font-size:13px;margin-top:3px;display:block;line-height:1.5;}
+  .own-btn:hover{border-color:#6a6358;}
+  .own-btn.on{border-color:#1a5a8a;background:#e8f0f8;color:#1a5a8a;}
+  .own-btn.on .ob-title{color:#1a5a8a;}
+  .own-btn.on .ob-sub{color:rgba(26,90,138,.7);}
+
+  /* RUN BUTTON */
+  .run-wrap{margin-top:6px;}
+  .run-btn{
+    width:100%;
+    background:var(--grad);
+    color:#fff;
+    border:none;
+    border-radius:10px;
+    padding:18px;
+    font-size:16px;
+    font-weight:700;
+    font-family:'Noto Sans JP',sans-serif;
+    cursor:pointer;
+    transition:.18s;
+    box-shadow:0 6px 24px rgba(26,90,138,.3);
+    letter-spacing:.02em;
+  }
+  .run-btn:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(26,90,138,.4);}
+  .run-btn:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none;}
+
+  /* STATUS */
+  .status{
+    display:none;
+    align-items:center;gap:14px;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:18px 22px;
+    margin-top:16px;
+    font-size:13.5px;
+    color:var(--ink2);
+  }
+  .status.show{display:flex;}
+  .spin{
+    width:20px;height:20px;
+    border:2.5px solid var(--border);
+    border-top-color:#1a5a8a;
+    border-radius:50%;
+    animation:spin .8s linear infinite;
+    flex:none;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* ERROR */
+  .err{
+    display:none;
+    background:#fef2f0;
+    border:1px solid rgba(192,48,32,.3);
+    border-radius:10px;
+    padding:16px 20px;
+    color:var(--red);
+    font-size:13px;
+    margin-top:16px;
+    line-height:1.7;
+  }
+  .err.show{display:block;}
+
+  footer{
+    text-align:center;
+    padding:24px;
+    color:var(--ink3);
+    font-family:'JetBrains Mono',monospace;
+    font-size:10.5px;
+    letter-spacing:.06em;
+    border-top:1px solid var(--border);
+    background:var(--surface);
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+  </div>
+  <div class="header-text">
+    <div class="header-title">セキュリティ脆弱性診断 <span>【シンプル版】</span><span class="header-badge">SIMPLE</span></div>
+    <div class="header-sub">リスク評価・原因・対応策のみ / 攻撃事例・損害額なし</div>
+  </div>
+</div>
+
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Anthropic APIキー</div>
+      <div style="position:relative;">
+        <input type="password" class="sb-select" id="apiKey" placeholder="sk-ant-..." style="padding-right:40px;font-family:'JetBrains Mono',monospace;font-size:11.5px;">
+        <button type="button" id="toggleKey" title="表示/非表示" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:0;opacity:.5;color:#f2f0eb;font-size:14px;">👁</button>
+      </div>
+      <p style="font-size:10.5px;color:rgba(242,240,235,.35);margin-top:7px;line-height:1.6;">ブラウザのlocalStorageに保存されます。</p>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">使用モデル</div>
+      <select class="sb-select" id="model">
+        <option value="claude-sonnet-4-6" selected>Claude Sonnet 4.6 — バランス推奨</option>
+        <option value="claude-opus-4-5-20251101">Claude Opus 4.5 — 最高精度</option>
+        <option value="claude-opus-4-7">Claude Opus 4.7</option>
+        <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 — 高速</option>
+      </select>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">シンプル版の特徴</div>
+      <div class="safety-note">
+        <strong>攻撃事例・損害額なし</strong><br>
+        <span style="font-size:12px;">リスク評価・原因・対応策に絞ったコンパクトなレポートを生成します。速く・読みやすく仕上がります。</span>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">サーバー接続先</div>
+      <select class="sb-select" id="endpointSelect" style="font-family:'JetBrains Mono',monospace;font-size:12px;background:#2a2a2a;border:1px solid rgba(255,255,255,.2);color:#f2f0eb;">
+        <option value="http://localhost:3001">Local（localhost:3001）</option>
+        <option value="https://security-diagnosis-production.up.railway.app">Railway</option>
+        <option value="https://security-diagnosis.tetsuya-mizuno.workers.dev">Cloudflare Workers</option>
+        <option value="custom">新規（URLを入力）</option>
+      </select>
+      <input type="text" class="sb-select" id="endpointUrl"
+        placeholder="https://..."
+        style="display:none;margin-top:8px;font-family:'JetBrains Mono',monospace;font-size:12px;background:#2a2a2a;border:1px solid rgba(255,255,255,.2);color:#f2f0eb;">
+      <p id="endpointNote" style="font-size:11px;color:rgba(242,240,235,.35);margin-top:6px;line-height:1.6;">
+        http://localhost:3001
+      </p>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">注意事項</div>
+      <div class="safety-note" style="background:rgba(192,120,32,.1);border-color:rgba(192,120,32,.25);">
+        <strong style="color:#f0b84a;">このツールは攻撃しません。</strong>
+        <span style="color:rgba(242,240,235,.6);font-size:12px;">公開情報をもとにAIがリスクを整理する教育・防御目的のレビューです。</span>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main" id="main-area">
+
+    <div id="form-area">
+      <!-- STEP 01 -->
+      <div class="field-group">
+        <div class="field-group-title">
+          <span class="fg-num">STEP 01</span>
+          診断対象のURL
+        </div>
+        <div class="field">
+          <label>診断するサイト / アプリのURL</label>
+          <input type="url" id="targetUrl" placeholder="https://example.com">
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label>これは誰のサイト / アプリですか？</label>
+          <div class="own-grid" id="ownership">
+            <button type="button" data-val="self" class="own-btn">
+              <span class="ob-title">自社のもの</span>
+              <span class="ob-sub">改善提案中心の実務レポート</span>
+            </button>
+            <button type="button" data-val="third_party" class="own-btn">
+              <span class="ob-title">他社のもの</span>
+              <span class="ob-sub">教育・防御目的（免責付き）</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- RUN -->
+      <div class="run-wrap">
+        <button class="run-btn" id="runBtn">シンプルレポートを生成する</button>
+      </div>
+
+      <div class="status" id="status">
+        <div class="spin"></div>
+        <span id="statusText">診断を実行しています…（しばらくお待ちください）</span>
+      </div>
+      <div class="err" id="err"></div>
+
+      <!-- 生成完了後に表示するボタン -->
+      <div id="openReportWrap" style="display:none;margin-top:20px;text-align:center;">
+        <div style="background:#e8f0f8;border:1px solid #1a5a8a;border-radius:10px;padding:20px 24px;margin-bottom:12px;">
+          <div style="font-size:18px;font-weight:700;color:#1a5a8a;margin-bottom:8px;">✅ レポートの生成が完了しました</div>
+          <div style="font-size:14px;color:#4a4540;margin-bottom:16px;">下のボタンを押してレポートを開いてください</div>
+          <button id="openReportBtn" class="run-btn" style="font-size:17px;padding:16px 32px;">
+            📄 レポートを新しいタブで開く
+          </button>
+        </div>
+        <div style="font-size:12px;color:#8a837a;">開いたタブ内の「PDFで保存」ボタンでPDF出力できます</div>
+      </div>
+
+    </div>
+
+  </main>
+</div>
+
+<footer>セキュリティ脆弱性診断【シンプル版】— 攻撃事例・損害額なし / OWASP Top 10 準拠</footer>
+
+<script>
+// ── APIキー ──
+const apiKeyEl = document.getElementById('apiKey');
+const toggleKeyBtn = document.getElementById('toggleKey');
+try { const k = localStorage.getItem('diag_apikey'); if (k) apiKeyEl.value = k; } catch(e){}
+apiKeyEl.addEventListener('change', () => { try { localStorage.setItem('diag_apikey', apiKeyEl.value.trim()); } catch(e){} });
+apiKeyEl.addEventListener('blur',   () => { try { localStorage.setItem('diag_apikey', apiKeyEl.value.trim()); } catch(e){} });
+toggleKeyBtn.addEventListener('click', () => { apiKeyEl.type = apiKeyEl.type === 'password' ? 'text' : 'password'; });
+
+// ── エンドポイントURL ──
+const endpointSelect = document.getElementById('endpointSelect');
+const endpointCustom = document.getElementById('endpointUrl');
+const endpointNote   = document.getElementById('endpointNote');
+const ENDPOINTS = {
+  'http://localhost:3001': 'http://localhost:3001',
+  'https://security-diagnosis-production.up.railway.app': 'https://security-diagnosis-production.up.railway.app',
+  'https://security-diagnosis.tetsuya-mizuno.workers.dev': 'https://security-diagnosis.tetsuya-mizuno.workers.dev',
+};
+function getEndpointUrl() {
+  return endpointSelect.value === 'custom' ? (endpointCustom.value.trim() || 'http://localhost:3001') : endpointSelect.value;
+}
+function updateEndpointUI() {
+  const isCustom = endpointSelect.value === 'custom';
+  endpointCustom.style.display = isCustom ? 'block' : 'none';
+  endpointNote.textContent = isCustom ? '' : getEndpointUrl();
+  try { localStorage.setItem('diag_endpoint', getEndpointUrl()); } catch(e){}
+}
+try {
+  const saved = localStorage.getItem('diag_endpoint');
+  if (saved) {
+    if (ENDPOINTS[saved]) { endpointSelect.value = saved; }
+    else { endpointSelect.value = 'custom'; endpointCustom.value = saved; }
+  }
+} catch(e){}
+updateEndpointUI();
+endpointSelect.addEventListener('change', updateEndpointUI);
+endpointCustom.addEventListener('blur', updateEndpointUI);
+
+// ── 入力済みクラス制御 ──
+function updateHasValue(el) {
+  el.value && el.value.trim() !== '' ? el.classList.add('has-value') : el.classList.remove('has-value');
+}
+document.querySelectorAll('.main input[type=url], .main input[type=text], .main select').forEach(el => {
+  updateHasValue(el);
+  el.addEventListener('input',  () => updateHasValue(el));
+  el.addEventListener('change', () => updateHasValue(el));
+});
+
+// ── 所有区分 ──
+let ownership = '';
+document.querySelectorAll('#ownership .own-btn').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('#ownership .own-btn').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    ownership = b.dataset.val;
+  });
+});
+
+// ── 設定復元 ──
+try {
+  const mdl = localStorage.getItem('diag_model');
+  if (mdl) {
+    const modelEl = document.getElementById('model');
+    const exists = Array.from(modelEl.options).some(o => o.value === mdl);
+    modelEl.value = exists ? mdl : 'claude-sonnet-4-6';
+  }
+} catch(e){}
+document.getElementById('model').addEventListener('change', () => {
+  try { localStorage.setItem('diag_model', document.getElementById('model').value); } catch(e){}
+});
+
+// ── 実行 ──
+const runBtn    = document.getElementById('runBtn');
+const statusEl  = document.getElementById('status');
+const statusText = document.getElementById('statusText');
+const errEl     = document.getElementById('err');
+
+runBtn.addEventListener('click', async () => {
+  const url = document.getElementById('targetUrl').value.trim();
+  if (!apiKeyEl.value.trim()) { errEl.textContent = 'APIキーを入力してください。'; errEl.classList.add('show'); return; }
+  if (!url) { errEl.textContent = 'URLを入力してください。'; errEl.classList.add('show'); return; }
+  if (!ownership) { errEl.textContent = '「自社のもの」か「他社のもの」を選択してください。'; errEl.classList.add('show'); return; }
+  errEl.classList.remove('show');
+  runBtn.disabled = true;
+  statusEl.classList.add('show');
+  statusText.textContent = '🔍 診断中… リスク評価・原因・対応策を生成しています（1〜2分かかります）';
+
+  try {
+    const res = await fetch(getEndpointUrl() + '/diagnose', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url,
+        ownership,
+        ownershipLabel: ownership === 'self' ? '自社のサイト/アプリ' : '他社のサイト/アプリ',
+        notes: '（なし）',
+        model: document.getElementById('model').value,
+        apiKey: apiKeyEl.value.trim(),
+        simpleMode: true   // ← シンプル版フラグ
+      })
+    });
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error(`サーバーエラー（${res.status}）: ${t.slice(0,200)}`);
+    }
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    if (data.isHtml) {
+      const blob   = new Blob([data.report], { type: 'text/html; charset=utf-8' });
+      const blobUrl = URL.createObjectURL(blob);
+      const wrap   = document.getElementById('openReportWrap');
+      const btn    = document.getElementById('openReportBtn');
+      wrap.style.display = 'block';
+      btn.onclick = () => {
+        const tab = window.open(blobUrl, '_blank');
+        if (!tab) {
+          const a = document.createElement('a');
+          a.href = blobUrl;
+          a.download = `security-simple-${new Date().toISOString().slice(0,10)}.html`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        }
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      };
+    } else {
+      const pre = document.createElement('pre');
+      pre.style.cssText = 'white-space:pre-wrap;font-size:13px;padding:20px;background:#f8f7f3;border:1px solid #ccc;border-radius:8px;margin-top:16px;';
+      pre.textContent = data.report;
+      document.getElementById('form-area').appendChild(pre);
+    }
+
+  } catch(e) {
+    errEl.textContent = e.message || '通信エラーが発生しました。server.jsが起動しているか確認してください。';
+    errEl.classList.add('show');
+  } finally {
+    runBtn.disabled = false;
+    statusEl.classList.remove('show');
+  }
+});
+</script>
+</body>
+</html>
