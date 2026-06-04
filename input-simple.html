@@ -478,10 +478,26 @@ function updateEndpointUI() {
   try { localStorage.setItem('diag_endpoint', getEndpointUrl()); } catch(e){}
 }
 try {
-  const saved = localStorage.getItem('diag_endpoint');
-  if (saved) {
-    if (ENDPOINTS[saved]) { endpointSelect.value = saved; }
-    else { endpointSelect.value = 'custom'; endpointCustom.value = saved; }
+  const isRailway = location.hostname.includes('railway.app');
+  if (isRailway) {
+    const railwayUrl = location.origin;
+    let found = false;
+    for (const opt of endpointSelect.options) {
+      if (opt.value === railwayUrl) { found = true; endpointSelect.value = railwayUrl; break; }
+    }
+    if (!found) {
+      const opt = document.createElement('option');
+      opt.value = railwayUrl;
+      opt.textContent = 'Railway（自動検出）';
+      endpointSelect.insertBefore(opt, endpointSelect.firstChild);
+      endpointSelect.value = railwayUrl;
+    }
+  } else {
+    const saved = localStorage.getItem('diag_endpoint');
+    if (saved) {
+      if (ENDPOINTS[saved]) { endpointSelect.value = saved; }
+      else { endpointSelect.value = 'custom'; endpointCustom.value = saved; }
+    }
   }
 } catch(e){}
 updateEndpointUI();

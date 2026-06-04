@@ -1,0 +1,12 @@
+# 自動生成ファイル
+server.pid
+
+# Claude Code設定
+.claude/
+
+# 旧バージョン
+run_diagnosis.js
+README.md
+
+# Node.js
+node_modules/

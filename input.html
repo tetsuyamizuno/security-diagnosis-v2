@@ -715,15 +715,32 @@ function updateEndpointUI() {
   try { localStorage.setItem('diag_endpoint', getEndpointUrl()); } catch(e){}
 }
 
-// 保存済み値を復元
+// 保存済み値を復元（Railway上でアクセスされた場合は自動でRailwayを選択）
 try {
-  const saved = localStorage.getItem('diag_endpoint');
-  if (saved) {
-    if (ENDPOINTS[saved]) {
-      endpointSelect.value = saved;
-    } else if (saved) {
-      endpointSelect.value = 'custom';
-      endpointCustom.value = saved;
+  const isRailway = location.hostname.includes('railway.app');
+  if (isRailway) {
+    const railwayUrl = location.origin;
+    // RailwayのURLを選択肢に追加または更新
+    let found = false;
+    for (const opt of endpointSelect.options) {
+      if (opt.value === railwayUrl) { found = true; endpointSelect.value = railwayUrl; break; }
+    }
+    if (!found) {
+      const opt = document.createElement('option');
+      opt.value = railwayUrl;
+      opt.textContent = 'Railway（自動検出）';
+      endpointSelect.insertBefore(opt, endpointSelect.firstChild);
+      endpointSelect.value = railwayUrl;
+    }
+  } else {
+    const saved = localStorage.getItem('diag_endpoint');
+    if (saved) {
+      if (ENDPOINTS[saved]) {
+        endpointSelect.value = saved;
+      } else if (saved) {
+        endpointSelect.value = 'custom';
+        endpointCustom.value = saved;
+      }
     }
   }
 } catch(e){}
