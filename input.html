@@ -531,7 +531,7 @@
       </div>
     </div>
 
-    <div class="sidebar-section">
+    <div class="sidebar-section" id="endpointSection">
       <div class="sidebar-label">サーバー接続先</div>
       <select class="sb-select" id="endpointSelect" style="font-family:'JetBrains Mono',monospace;font-size:12px;background:#2a2a2a;border:1px solid rgba(255,255,255,.2);color:#f2f0eb;">
         <option value="http://localhost:3001">Local（localhost:3001）</option>
@@ -715,35 +715,27 @@ function updateEndpointUI() {
   try { localStorage.setItem('diag_endpoint', getEndpointUrl()); } catch(e){}
 }
 
-// 保存済み値を復元（Railway上でアクセスされた場合は自動でRailwayを選択）
-try {
-  const isRailway = location.hostname.includes('railway.app');
-  if (isRailway) {
-    const railwayUrl = location.origin;
-    // RailwayのURLを選択肢に追加または更新
-    let found = false;
-    for (const opt of endpointSelect.options) {
-      if (opt.value === railwayUrl) { found = true; endpointSelect.value = railwayUrl; break; }
-    }
-    if (!found) {
-      const opt = document.createElement('option');
-      opt.value = railwayUrl;
-      opt.textContent = 'Railway（自動検出）';
-      endpointSelect.insertBefore(opt, endpointSelect.firstChild);
-      endpointSelect.value = railwayUrl;
-    }
-  } else {
+// Railway上でアクセスされた場合：選択欄を非表示にしてRailway固定
+const isRailway = location.hostname.includes('railway.app');
+if (isRailway) {
+  // サーバー接続先セクションを非表示
+  document.getElementById('endpointSection').style.display = 'none';
+  // endpointを現在のオリジン（Railway）に固定
+  endpointSelect.value = location.origin;
+} else {
+  // localhost：保存済み値を復元
+  try {
     const saved = localStorage.getItem('diag_endpoint');
     if (saved) {
       if (ENDPOINTS[saved]) {
         endpointSelect.value = saved;
-      } else if (saved) {
+      } else {
         endpointSelect.value = 'custom';
         endpointCustom.value = saved;
       }
     }
-  }
-} catch(e){}
+  } catch(e){}
+}
 updateEndpointUI();
 
 endpointSelect.addEventListener('change', updateEndpointUI);

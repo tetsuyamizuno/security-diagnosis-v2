@@ -365,7 +365,7 @@
       </div>
     </div>
 
-    <div class="sidebar-section">
+    <div class="sidebar-section" id="endpointSection">
       <div class="sidebar-label">サーバー接続先</div>
       <select class="sb-select" id="endpointSelect" style="font-family:'JetBrains Mono',monospace;font-size:12px;background:#2a2a2a;border:1px solid rgba(255,255,255,.2);color:#f2f0eb;">
         <option value="http://localhost:3001">Local（localhost:3001）</option>
@@ -477,29 +477,19 @@ function updateEndpointUI() {
   endpointNote.textContent = isCustom ? '' : getEndpointUrl();
   try { localStorage.setItem('diag_endpoint', getEndpointUrl()); } catch(e){}
 }
-try {
-  const isRailway = location.hostname.includes('railway.app');
-  if (isRailway) {
-    const railwayUrl = location.origin;
-    let found = false;
-    for (const opt of endpointSelect.options) {
-      if (opt.value === railwayUrl) { found = true; endpointSelect.value = railwayUrl; break; }
-    }
-    if (!found) {
-      const opt = document.createElement('option');
-      opt.value = railwayUrl;
-      opt.textContent = 'Railway（自動検出）';
-      endpointSelect.insertBefore(opt, endpointSelect.firstChild);
-      endpointSelect.value = railwayUrl;
-    }
-  } else {
+const isRailway = location.hostname.includes('railway.app');
+if (isRailway) {
+  document.getElementById('endpointSection').style.display = 'none';
+  endpointSelect.value = location.origin;
+} else {
+  try {
     const saved = localStorage.getItem('diag_endpoint');
     if (saved) {
       if (ENDPOINTS[saved]) { endpointSelect.value = saved; }
       else { endpointSelect.value = 'custom'; endpointCustom.value = saved; }
     }
-  }
-} catch(e){}
+  } catch(e){}
+}
 updateEndpointUI();
 endpointSelect.addEventListener('change', updateEndpointUI);
 endpointCustom.addEventListener('blur', updateEndpointUI);
