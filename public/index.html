@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>脆弱性診断レポート作成</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --bg: #f0faf4; --accent: #16a34a; --accent-hover: #15803d;
+      --text: #14532d; --text-muted: #4b7a5e; --border: #86efac;
+    }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; }
+    .input-field {
+      background: #fff; border: 1.5px solid var(--border); color: var(--text);
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .input-field:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(22,163,74,0.15); }
+    .input-field::placeholder { color: #9ca3af; }
+    .owner-card {
+      border: 2px solid var(--border); background: #fff; border-radius: 16px;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .owner-card:hover { border-color: var(--accent); box-shadow: 0 4px 16px rgba(22,163,74,0.12); }
+    .owner-card.selected { border-color: var(--accent); background: #f0fdf4; box-shadow: 0 4px 20px rgba(22,163,74,0.2); }
+    .btn-primary { background: var(--accent); color: #fff; transition: background 0.2s, transform 0.1s; }
+    .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+    .btn-primary:active:not(:disabled) { transform: scale(0.98); }
+    .btn-primary:disabled { background: #d1d5db; cursor: not-allowed; }
+    .btn-secondary { background: #fff; border: 1.5px solid var(--border); color: var(--text); transition: all 0.2s; }
+    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+    .status-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 0.72rem; padding: 2px 8px; border-radius: 9999px; }
+    .status-ok { background: rgba(22,163,74,0.12); color: #15803d; border: 1px solid rgba(22,163,74,0.3); }
+    .status-ng { background: rgba(239,68,68,0.1); color: #dc2626; border: 1px solid rgba(239,68,68,0.25); }
+    .model-badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 4px; background: rgba(22,163,74,0.1); color: #15803d; border: 1px solid rgba(22,163,74,0.3); }
+    .settings-panel { transition: all 0.25s; }
+    .settings-panel.collapsed { display: none; }
+    .select-field { background: #fff; border: 1.5px solid var(--border); color: var(--text); border-radius: 8px; padding: 8px 12px; width: 100%; }
+    .select-field:focus { outline: none; border-color: var(--accent); }
+    .step { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; color: var(--text-muted); }
+    .step.done { color: var(--accent); }
+    .step.active { color: var(--text); font-weight: 600; }
+    .step-dot { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: bold; flex-shrink: 0; background: #e5e7eb; color: #9ca3af; }
+    .step.done .step-dot { background: var(--accent); color: #fff; }
+    .step.active .step-dot { background: var(--text); color: #fff; animation: pulse-dot 1.5s infinite; }
+    @keyframes pulse-dot { 0%,100%{box-shadow:0 0 0 0 rgba(22,163,74,0.4)} 50%{box-shadow:0 0 0 6px rgba(22,163,74,0)} }
+    #scanCanvas { border-radius: 50%; background: #0f172a; box-shadow: 0 0 30px rgba(16,185,129,0.3); }
+    @keyframes slideUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes slideDown { from{opacity:1;transform:translateY(0)} to{opacity:0;transform:translateY(12px)} }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+    .fade-in { animation: fadeIn 0.3s ease; }
+    .fetch-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 0.7rem; padding: 2px 8px; border-radius: 4px; }
+    .fetch-ok { background: rgba(22,163,74,0.12); color: #15803d; border: 1px solid rgba(22,163,74,0.3); }
+    .fetch-warn { background: rgba(245,158,11,0.12); color: #b45309; border: 1px solid rgba(245,158,11,0.3); }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <!-- Header -->
+  <header class="border-b border-green-200 bg-green-50/90 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-green-600 flex items-center justify-center text-white text-sm">🔒</div>
+        <div>
+          <h1 class="font-bold text-sm sm:text-base text-green-900">脆弱性診断レポート作成</h1>
+          <p class="text-xs text-green-600 hidden sm:block">実HTMLフェッチ ＋ Google Gemini + Search</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span id="key-status" class="status-badge status-ng">
+          <span class="w-1.5 h-1.5 rounded-full bg-red-400"></span>APIキー未設定
+        </span>
+        <button onclick="toggleSettings()" class="p-2 rounded-lg text-green-700 hover:bg-green-100 transition-colors" title="設定">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Settings -->
+  <div id="settings-panel" class="settings-panel collapsed border-b border-green-200 bg-green-100/80">
+    <div class="max-w-3xl mx-auto px-4 py-4">
+      <h2 class="text-sm font-semibold text-green-800 mb-3">⚙️ API設定</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs text-green-700 mb-1.5 font-medium">Gemini APIキー</label>
+          <div class="relative">
+            <input id="api-key-input" type="password" placeholder="AIza..."
+              class="input-field w-full px-3 py-2 pr-10 rounded-lg text-sm" oninput="onApiKeyChange()"/>
+            <button onclick="toggleApiKeyVisibility()" class="absolute right-3 top-1/2 -translate-y-1/2 text-green-500 hover:text-green-800">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+              </svg>
+            </button>
+          </div>
+          <p class="text-xs text-green-600 mt-1">ブラウザのlocalStorageに保存されます</p>
+        </div>
+        <div>
+          <label class="block text-xs text-green-700 mb-1.5 font-medium">使用モデル</label>
+          <select id="model-select" class="select-field text-sm" onchange="onModelChange()">
+            <option value="gemini-2.5-pro">gemini-2.5-pro（最高精度・推奨）</option>
+            <option value="gemini-2.5-flash">gemini-2.5-flash（高速・バランス）</option>
+            <option value="gemini-2.0-flash">gemini-2.0-flash（軽量・高速）</option>
+            <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite（超軽量）</option>
+            <option value="gemini-1.5-pro">gemini-1.5-pro（旧世代・安定）</option>
+            <option value="gemini-1.5-flash">gemini-1.5-flash（旧世代・高速）</option>
+          </select>
+        </div>
+      </div>
+      <div class="flex gap-2 mt-3">
+        <button onclick="saveSettings()" class="btn-primary text-sm px-4 py-2 rounded-lg font-medium">保存して閉じる</button>
+        <button onclick="clearApiKey()" class="btn-secondary text-sm px-4 py-2 rounded-lg text-red-500 border-red-200 hover:border-red-400">APIキーを削除</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <main id="main-content" class="max-w-3xl mx-auto px-4 py-6">
+
+    <!-- FORM -->
+    <div id="panel-form" class="fade-in">
+      <div class="bg-white rounded-2xl border border-green-200 shadow-sm p-6 mb-4">
+        <label class="block text-sm font-semibold text-green-900 mb-2">📎 診断対象URL</label>
+        <input id="url-input" type="url" placeholder="https://example.com"
+          class="input-field w-full px-4 py-3 rounded-xl text-sm" oninput="validateForm()"/>
+        <p class="text-xs text-green-600 mt-1.5">https:// から始まるURLを入力してください</p>
+      </div>
+
+      <div class="bg-white rounded-2xl border border-green-200 shadow-sm p-6 mb-5">
+        <p class="text-sm font-semibold text-green-900 mb-3">🏢 対象サイトの所有区分</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label class="owner-card p-4 block" id="card-own" onclick="selectOwner('own')">
+            <input type="radio" name="owner" value="own" style="display:none">
+            <div class="flex items-start gap-3">
+              <div class="text-2xl mt-0.5">🏠</div>
+              <div>
+                <p class="font-semibold text-green-900 text-sm">自社サイト / アプリ</p>
+                <p class="text-xs text-green-700 mt-1 leading-relaxed">OWASP Top 10ベースの本格的な脆弱性診断。実際のHTML・HTTPヘッダーを取得して分析します。</p>
+              </div>
+            </div>
+          </label>
+          <label class="owner-card p-4 block" id="card-other" onclick="selectOwner('other')">
+            <input type="radio" name="owner" value="other" style="display:none">
+            <div class="flex items-start gap-3">
+              <div class="text-2xl mt-0.5">🌐</div>
+              <div>
+                <p class="font-semibold text-green-900 text-sm">他社サイト / アプリ</p>
+                <p class="text-xs text-green-700 mt-1 leading-relaxed">公開情報に基づく教育・防御目的のレポート。実際のHTML・HTTPヘッダーを取得して分析します。</p>
+              </div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <button id="run-btn" onclick="startDiagnosis()"
+        class="btn-primary w-full py-4 rounded-2xl text-base font-bold flex items-center justify-center gap-2" disabled>
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+        </svg>
+        診断を開始する
+      </button>
+      <p class="text-center text-xs text-green-600 mt-2">
+        <span id="model-display" class="model-badge">gemini-2.5-pro</span>
+        ＋ 実HTMLフェッチ ＋ Google Search
+      </p>
+    </div>
+
+    <!-- PROGRESS -->
+    <div id="panel-progress" class="hidden fade-in">
+      <div class="bg-white rounded-2xl border border-green-200 shadow-sm p-6 mb-4">
+        <div class="flex flex-col items-center mb-6">
+          <canvas id="scanCanvas" width="200" height="200"></canvas>
+          <p id="progress-label" class="mt-3 text-sm text-green-700 font-medium animate-pulse">🔍 サイト情報を取得中...</p>
+          <p id="progress-url" class="text-xs text-green-500 mt-1 truncate max-w-xs"></p>
+          <div id="fetch-result" class="mt-2 hidden">
+            <span id="fetch-badge" class="fetch-badge fetch-ok"></span>
+          </div>
+        </div>
+        <div class="space-y-2.5">
+          <div class="step" id="step1"><div class="step-dot">1</div>対象サイトのHTML・HTTPヘッダーを実際に取得</div>
+          <div class="step" id="step2"><div class="step-dot">2</div>取得データからHTTPセキュリティヘッダーを分析</div>
+          <div class="step" id="step3"><div class="step-dot">3</div>HTMLから技術スタック・外部スクリプトを解析</div>
+          <div class="step" id="step4"><div class="step-dot">4</div>最新CVE・脆弱性情報をWeb検索</div>
+          <div class="step" id="step5"><div class="step-dot">5</div>攻撃事例・統計の裏取り</div>
+          <div class="step" id="step6"><div class="step-dot">6</div>リスク優先度の補正・セルフレビュー</div>
+          <div class="step" id="step7"><div class="step-dot">7</div>レポートHTML生成・出力</div>
+        </div>
+      </div>
+      <button onclick="cancelDiagnosis()" class="btn-secondary w-full py-3 rounded-2xl text-sm">キャンセル</button>
+    </div>
+
+    <!-- REPORT -->
+    <div id="panel-report" class="hidden fade-in">
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2">
+          <h2 class="font-semibold text-green-900">📋 診断レポート</h2>
+          <button onclick="toggleReportView()" id="view-toggle-btn"
+            class="text-xs px-3 py-1 rounded-lg border border-green-300 text-green-700 hover:bg-green-100 transition-colors">
+            📄 HTMLソース
+          </button>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="newDiagnosis()" class="btn-secondary text-sm px-3 py-1.5 rounded-lg">🔄 新しい診断</button>
+          <button onclick="copyReport()" class="btn-secondary text-sm px-3 py-1.5 rounded-lg">📋 コピー</button>
+          <button onclick="downloadReport()" class="btn-primary text-sm px-4 py-1.5 rounded-lg font-medium">💾 HTMLを保存</button>
+        </div>
+      </div>
+      <div id="report-preview-wrap" style="height: calc(100vh - 220px); min-height: 500px;">
+        <iframe id="report-iframe" class="w-full h-full rounded-2xl bg-white" style="border: 1.5px solid #86efac;"></iframe>
+      </div>
+      <textarea id="report-output" class="hidden w-full rounded-2xl p-4 text-xs leading-relaxed"
+        style="height: calc(100vh - 220px); min-height: 500px; background: #f0fdf4; color: #166534; font-family: 'Consolas', monospace; border: 1.5px solid #86efac; resize: vertical;"></textarea>
+    </div>
+
+  </main>
+
+  <script>
+    // ===== State =====
+    let selectedOwner = null;
+    let abortController = null;
+    let reportHtml = '';
+    let reportViewMode = 'preview';
+    let stepTimer = null;
+    let radarId = null;
+    let radarAngle = 0;
+    let cancelled = false;
+
+    // ===== Prompts =====
+    function buildPrompt(owner, url, siteData) {
+      const hasFetch = siteData && !siteData.error;
+
+      const fetchedInfo = hasFetch ? `
+【実際に取得したサイト情報】（サーバー経由でHTTPリクエストして取得した実データです）
+
+■ 最終URL: ${siteData.finalUrl || url}
+■ HTTPステータス: ${siteData.statusCode}
+
+■ HTTPレスポンスヘッダー（全件）:
+${Object.entries(siteData.headers).map(([k,v]) => `  ${k}: ${v}`).join('\n')}
+
+■ HTMLソース（先頭150KB）:
+${siteData.html}
+` : `
+【注意】対象サイトへの実際のHTTPアクセスに失敗しました。AIの学習データとWeb検索を元に推定分析を行ってください。
+`;
+
+      const commonPrompt = `あなたは高度な専門知識を持つプロのセキュリティエンジニアです。
+以下の【実際に取得したサイト情報】を詳細に分析し、セキュリティ脆弱性診断レポートを作成してください。
+googleSearchツールも活用して最新のCVE・攻撃事例・統計情報を補完してください。
+
+${fetchedInfo}
+
+【診断対象URL】: ${url}
+【所有区分】: ${owner === 'own' ? '自社サイト/アプリ' : '他社サイト/アプリ（公開情報に基づく教育目的）'}`;
+
+      const ownInstructions = `
+分析手順（必ずこの順で実行）：
+① 上記HTMLから技術スタック（フレームワーク・CMS・認証基盤・決済・分析ツール・外部スクリプト）を特定
+② 上記HTTPヘッダーからセキュリティ設定（CSP・HSTS・X-Frame-Options・X-Content-Type-Options・Referrer-Policy・Permissions-Policy・Set-Cookie属性）を評価
+③ 特定した技術スタックの最新CVEをWeb検索で調査
+④ HTMLソース内の不審な点（露出した内部情報・危険なスクリプト等）を深掘り
+⑤ 攻撃事例・統計の裏取り（IBMコスト報告・警察庁統計・IPA10大脅威。捏造厳禁）
+⑥ サイト性質に応じたリスク優先度補正
+⑦ セルフレビュー（推測と確認済みを明確に区別）
+
+【重要】出力トークン上限に注意：HTMLが途中で切れないよう、各リスクカードの説明は簡潔にまとめること。必ず</html>タグまで出力しきること。
+
+出力：<!DOCTYPE html>から始まる完全なHTMLのみ出力（マークダウン装飾不要）。Tailwind CSS(CDN)使用。
+
+HTMLレポート構成：
+1. 冒頭注記：実際のHTTPリクエストによる外部診断である旨・OWASP準拠・損害額は公的統計推計
+2. 対象サマリー：URL・所有区分・技術スタック（確認済み/推定を区別）・HTTPヘッダー設定状況一覧・サイト種別
+3. リスク一覧（高→中→低）：OWASP Top 10:2025ベースで上位3件に厳選。各カードに①リスク説明と評価（確認済み/推定を明示）②実際の攻撃事例2つ（出典付き）③想定損害額④原因（専門用語注釈）⑤対応策（優先順位付き3つまで）
+4. 優先対応ロードマップ（表形式）：リスク名・評価・優先度・推奨対応期限・中核対策
+5. 免責事項
+6. PDFダウンロードボタン（window.print()）・@media print { .no-print { display:none; } }`;
+
+      const otherInstructions = `
+【重要制約】
+- 攻撃手順・エクスプロイト方法は一切記載しない
+- 脆弱性の存在を断定しない（「この種の構成では一般的に〜のリスクがある」という教育的記述のみ）
+- 推測と確認済み情報を明確に区別する
+
+分析手順（必ずこの順で実行）：
+① 上記HTMLから技術スタック・外部スクリプト依存関係を特定（推定として明示）
+② 上記HTTPヘッダーからセキュリティ設定を評価（不足しているベストプラクティスを指摘）
+③ 同種技術スタックの一般的なリスク類型をWeb検索で調査
+④ 同業界での公開インシデント事例をWeb検索で収集（IBMコスト報告・警察庁・IPA等。捏造厳禁）
+⑤ リスク評価（推測ベースであることを明示）
+
+【重要】出力トークン上限に注意：HTMLが途中で切れないよう、各リスクカードの説明は簡潔にまとめること。必ず</html>タグまで出力しきること。
+
+出力：<!DOCTYPE html>から始まる完全なHTMLのみ出力（マークダウン装飾不要）。Tailwind CSS(CDN)使用。
+
+HTMLレポート構成：
+1. 冒頭注記（太字・目立つ配色）：「本レポートは実HTTPリクエストによる公開情報に基づく教育・防御目的の整理です。実際の脆弱性の存在を示すものではありません。」・OWASP準拠
+2. 対象サマリー：URL・分析種別（教育目的）・推定技術スタック・HTTPヘッダー設定状況・サイト種別
+3. リスク類型一覧（高→中→低）：上位3件に厳選。各カードに①リスク類型説明②同業界の公開インシデント事例2つ（出典付き）③業界統計ベースの潜在的損害規模④一般的な原因（専門用語注釈）⑤防御側（自社参考用）対応策（3つまで）
+4. 推奨防御ロードマップ（表形式）：リスク名・評価・優先度・推奨対応期限・中核対策
+5. 免責事項（他社サイトであることを明記）
+6. PDFダウンロードボタン（window.print()）・@media print { .no-print { display:none; } }`;
+
+      return commonPrompt + (owner === 'own' ? ownInstructions : otherInstructions);
+    }
+
+    // ===== Init =====
+    function init() {
+      const key = localStorage.getItem('gemini_api_key') || '';
+      const model = localStorage.getItem('gemini_model') || 'gemini-2.5-pro';
+      document.getElementById('api-key-input').value = key;
+      document.getElementById('model-select').value = model;
+      document.getElementById('model-display').textContent = model;
+      updateKeyStatus(key);
+      if (!key) document.getElementById('settings-panel').classList.remove('collapsed');
+    }
+
+    // ===== Settings =====
+    function toggleSettings() { document.getElementById('settings-panel').classList.toggle('collapsed'); }
+    function saveSettings() {
+      const key = document.getElementById('api-key-input').value.trim();
+      const model = document.getElementById('model-select').value;
+      if (key) localStorage.setItem('gemini_api_key', key);
+      localStorage.setItem('gemini_model', model);
+      document.getElementById('model-display').textContent = model;
+      updateKeyStatus(key);
+      document.getElementById('settings-panel').classList.add('collapsed');
+    }
+    function clearApiKey() {
+      if (!confirm('APIキーを削除しますか？')) return;
+      localStorage.removeItem('gemini_api_key');
+      document.getElementById('api-key-input').value = '';
+      updateKeyStatus('');
+    }
+    function onApiKeyChange() {
+      const key = document.getElementById('api-key-input').value.trim();
+      if (key) { localStorage.setItem('gemini_api_key', key); updateKeyStatus(key); }
+    }
+    function onModelChange() {
+      const model = document.getElementById('model-select').value;
+      localStorage.setItem('gemini_model', model);
+      document.getElementById('model-display').textContent = model;
+    }
+    function updateKeyStatus(key) {
+      const el = document.getElementById('key-status');
+      if (key && key.startsWith('AIza') && key.length > 20) {
+        el.className = 'status-badge status-ok';
+        el.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>APIキー設定済';
+      } else {
+        el.className = 'status-badge status-ng';
+        el.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-red-400"></span>APIキー未設定';
+      }
+    }
+    function toggleApiKeyVisibility() {
+      const el = document.getElementById('api-key-input');
+      el.type = el.type === 'password' ? 'text' : 'password';
+    }
+
+    // ===== Form =====
+    function selectOwner(val) {
+      selectedOwner = val;
+      document.getElementById('card-own').classList.toggle('selected', val === 'own');
+      document.getElementById('card-other').classList.toggle('selected', val === 'other');
+      validateForm();
+    }
+    function validateForm() {
+      const url = document.getElementById('url-input').value.trim();
+      document.getElementById('run-btn').disabled = !(url.startsWith('http') && selectedOwner);
+    }
+
+    // ===== Radar =====
+    function startRadar() {
+      const canvas = document.getElementById('scanCanvas');
+      const ctx = canvas.getContext('2d');
+      radarAngle = 0;
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      function draw() {
+        const w = canvas.width, h = canvas.height, cx = w/2, cy = h/2, r = w/2 - 8;
+        ctx.fillStyle = 'rgba(15,23,42,0.12)';
+        ctx.fillRect(0, 0, w, h);
+        ctx.strokeStyle = 'rgba(16,185,129,0.3)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        [1, 0.66, 0.33].forEach(s => { ctx.moveTo(cx, cy); ctx.arc(cx, cy, r*s, 0, Math.PI*2); });
+        ctx.moveTo(cx, cy-r); ctx.lineTo(cx, cy+r);
+        ctx.moveTo(cx-r, cy); ctx.lineTo(cx+r, cy);
+        ctx.stroke();
+        ctx.save(); ctx.translate(cx, cy); ctx.rotate(radarAngle);
+        ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0,0,r,0,-Math.PI/3,true); ctx.lineTo(0,0);
+        const g = ctx.createLinearGradient(0,0,r,0);
+        g.addColorStop(0,'rgba(16,185,129,0.7)'); g.addColorStop(1,'rgba(16,185,129,0)');
+        ctx.fillStyle = g; ctx.fill();
+        ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(r,0);
+        ctx.strokeStyle = 'rgba(52,211,153,1)'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.restore();
+        radarAngle += 0.04;
+        radarId = requestAnimationFrame(draw);
+      }
+      draw();
+    }
+    function stopRadar() { if (radarId) cancelAnimationFrame(radarId); radarId = null; }
+
+    // ===== Steps =====
+    function setStep(n, state) {
+      const el = document.getElementById(`step${n}`);
+      el.className = `step ${state}`;
+      el.querySelector('.step-dot').textContent = state === 'done' ? '✓' : n;
+    }
+    function markAllDone() { for (let n=1; n<=7; n++) setStep(n, 'done'); }
+
+    const stepDurations = [0, 0, 8000, 10000, 8000, 6000, 8000]; // step1,2 are real; 3-7 are timers
+
+    function startTimedSteps(fromStep) {
+      let i = fromStep;
+      function next() {
+        if (cancelled || i > 7) return;
+        setStep(i, 'active');
+        stepTimer = setTimeout(() => {
+          setStep(i, 'done');
+          i++;
+          next();
+        }, stepDurations[i] || 7000);
+      }
+      next();
+    }
+    function stopTimedSteps() { if (stepTimer) clearTimeout(stepTimer); }
+
+    // ===== Panel =====
+    function showPanel(name) {
+      ['form','progress','report'].forEach(p => {
+        document.getElementById(`panel-${p}`).classList.toggle('hidden', p !== name);
+      });
+      const main = document.getElementById('main-content');
+      if (name === 'report') { main.classList.remove('max-w-3xl'); main.classList.add('max-w-7xl'); }
+      else { main.classList.remove('max-w-7xl'); main.classList.add('max-w-3xl'); }
+    }
+
+    // ===== Diagnosis =====
+    async function startDiagnosis() {
+      const apiKey = localStorage.getItem('gemini_api_key') || '';
+      if (!apiKey) {
+        alert('先にAPIキーを設定してください（右上の⚙️ボタン）');
+        document.getElementById('settings-panel').classList.remove('collapsed');
+        return;
+      }
+      const url = document.getElementById('url-input').value.trim();
+      if (!url || !selectedOwner) return;
+
+      cancelled = false;
+      showPanel('progress');
+      document.getElementById('progress-url').textContent = url;
+      document.getElementById('fetch-result').classList.add('hidden');
+      startRadar();
+
+      // ---- Step 1: 実際にHTMLを取得 ----
+      setStep(1, 'active');
+      document.getElementById('progress-label').textContent = '🔍 サイトのHTMLを取得中...';
+      let siteData = null;
+      try {
+        const res = await fetch(`/api/fetch-site?url=${encodeURIComponent(url)}`);
+        siteData = await res.json();
+        if (siteData.error) throw new Error(siteData.error);
+        // 成功表示
+        const badge = document.getElementById('fetch-badge');
+        badge.className = 'fetch-badge fetch-ok';
+        badge.textContent = `✅ HTTP ${siteData.statusCode} 取得成功（${Math.round(siteData.html.length/1024)}KB）`;
+        document.getElementById('fetch-result').classList.remove('hidden');
+      } catch (err) {
+        if (cancelled) return;
+        // 失敗時はAIのみで続行
+        const badge = document.getElementById('fetch-badge');
+        badge.className = 'fetch-badge fetch-warn';
+        badge.textContent = `⚠️ 取得失敗（${err.message}）— AI推定モードで続行`;
+        document.getElementById('fetch-result').classList.remove('hidden');
+        siteData = null;
+      }
+      if (cancelled) return;
+      setStep(1, 'done');
+
+      // ---- Step 2: ヘッダー分析（表示のみ、実処理はGeminiが行う）----
+      setStep(2, 'active');
+      document.getElementById('progress-label').textContent = '🔍 脅威インテリジェンスを分析中...';
+      await new Promise(r => setTimeout(r, 1500));
+      if (cancelled) return;
+      setStep(2, 'done');
+
+      // ---- Steps 3-7: タイマーアニメーション（Gemini処理中）----
+      startTimedSteps(3);
+
+      // ---- Gemini API 呼び出し ----
+      const fullPrompt = buildPrompt(selectedOwner, url, siteData);
+      abortController = new AbortController();
+      try {
+        const html = await callGeminiAPI(apiKey, fullPrompt, abortController.signal);
+        if (cancelled) return;
+        stopTimedSteps();
+        stopRadar();
+        markAllDone();
+
+        if (html) {
+          reportHtml = html;
+          document.getElementById('report-output').value = html;
+          loadIframe(html);
+          showPanel('report');
+          showToast('🎉 レポート作成が完了しました');
+        } else {
+          alert('レポートのHTMLが見つかりませんでした。もう一度お試しください。');
+          showPanel('form');
+        }
+      } catch (err) {
+        stopTimedSteps();
+        stopRadar();
+        if (!cancelled && err.name !== 'AbortError') {
+          alert('エラーが発生しました:\n' + (err.message || err));
+          showPanel('form');
+        }
+      }
+    }
+
+    function cancelDiagnosis() {
+      cancelled = true;
+      if (abortController) abortController.abort();
+      stopRadar();
+      stopTimedSteps();
+      showPanel('form');
+    }
+
+    function newDiagnosis() {
+      reportHtml = '';
+      reportViewMode = 'preview';
+      document.getElementById('report-output').value = '';
+      const iframe = document.getElementById('report-iframe');
+      if (iframe._url) URL.revokeObjectURL(iframe._url);
+      iframe.src = '';
+      document.getElementById('report-preview-wrap').classList.remove('hidden');
+      document.getElementById('report-output').classList.add('hidden');
+      document.getElementById('view-toggle-btn').textContent = '📄 HTMLソース';
+      showPanel('form');
+    }
+
+    // ===== Gemini API =====
+    async function callGeminiAPI(apiKey, prompt, signal) {
+      const model = localStorage.getItem('gemini_model') || 'gemini-2.5-pro';
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      const body = {
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        tools: [{ googleSearch: {} }],
+        generationConfig: { temperature: 0.2, maxOutputTokens: 65536 },
+        safetySettings: [
+          { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+        ]
+      };
+      const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error?.message || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      if (data.promptFeedback?.blockReason) throw new Error('ブロックされました: ' + data.promptFeedback.blockReason);
+      const parts = data.candidates?.[0]?.content?.parts || [];
+      const text = parts.map(p => p.text || '').join('');
+      if (!text) throw new Error('レスポンスが空です');
+      const m = text.match(/```html\s*([\s\S]*?)\s*```/i);
+      if (m) return m[1].trim();
+      const m2 = text.match(/(<!DOCTYPE html>[\s\S]*?<\/html>)/i);
+      if (m2) return m2[1].trim();
+      if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) return text.trim();
+      return null;
+    }
+
+    // ===== Report =====
+    function loadIframe(html) {
+      const iframe = document.getElementById('report-iframe');
+      if (iframe._url) URL.revokeObjectURL(iframe._url);
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      iframe._url = URL.createObjectURL(blob);
+      iframe.src = iframe._url;
+    }
+    function toggleReportView() {
+      const wrap = document.getElementById('report-preview-wrap');
+      const ta = document.getElementById('report-output');
+      const btn = document.getElementById('view-toggle-btn');
+      if (reportViewMode === 'preview') {
+        reportViewMode = 'source'; wrap.classList.add('hidden'); ta.classList.remove('hidden'); btn.textContent = '👁️ プレビュー';
+      } else {
+        reportViewMode = 'preview'; ta.classList.add('hidden'); wrap.classList.remove('hidden'); btn.textContent = '📄 HTMLソース';
+        if (ta.value.trim()) loadIframe(ta.value.trim());
+      }
+    }
+    function copyReport() {
+      const val = document.getElementById('report-output').value;
+      if (!val) { alert('コンテンツがありません'); return; }
+      navigator.clipboard.writeText(val).then(() => showToast('📋 コピーしました'));
+    }
+    function downloadReport() {
+      const val = document.getElementById('report-output').value.trim();
+      if (!val) { alert('レポートがありません'); return; }
+      const now = new Date();
+      const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([val], { type: 'text/html;charset=utf-8' }));
+      a.download = `security_report_${ts}.html`;
+      a.click();
+    }
+
+    // ===== Toast =====
+    function showToast(msg) {
+      const old = document.getElementById('toast'); if (old) old.remove();
+      const t = document.createElement('div'); t.id = 'toast';
+      t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#15803d;color:#fff;padding:10px 24px;border-radius:999px;font-size:0.85rem;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,0.15);z-index:9999;animation:slideUp 0.3s ease;white-space:nowrap;';
+      t.textContent = msg; document.body.appendChild(t);
+      setTimeout(() => { t.style.animation = 'slideDown 0.3s ease forwards'; setTimeout(() => t.remove(), 300); }, 3500);
+    }
+
+    init();
+  </script>
+</body>
+</html>
