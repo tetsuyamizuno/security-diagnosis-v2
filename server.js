@@ -451,11 +451,11 @@ async function callClaude(userMessage, model, apiKey, simpleMode = false) {
   return new Promise((resolve, reject) => {
     const resolvedKey = apiKey || API_KEY;
     if (!resolvedKey) { reject(new Error('APIキーが設定されていません。入力欄にAPIキーを入力してください。')); return; }
-    // 常時 Deep Research（Web検索オン・最大15回）
-    const tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 2 }];
+    // 詳細版・シンプル版ともに1回のみ（タイムアウト対策）
+    const tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 1 }];
     const bodyObj = {
       model,
-      max_tokens: 48000,
+      max_tokens: 32000,
       system: simpleMode ? SYSTEM_PROMPT_SIMPLE : SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userMessage }],
       tools
