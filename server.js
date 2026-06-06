@@ -452,7 +452,7 @@ async function callClaude(userMessage, model, apiKey, simpleMode = false) {
   return new Promise((resolve, reject) => {
     const resolvedKey = apiKey || API_KEY;
     if (!resolvedKey) { reject(new Error('APIキーが設定されていません。入力欄にAPIキーを入力してください。')); return; }
-    // 詳細版・シンプル版ともに1回のみ（タイムアウト対策）
+    // 詳細版・シンプル版ともに1回（タイムアウト対策）
     const tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 1 }];
     const bodyObj = {
       model,
