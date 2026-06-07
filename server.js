@@ -491,11 +491,15 @@ async function correctGarbledText(html, apiKey, model) {
 
   const toCorrect = garbled.slice(0, 20);
 
-  const prompt = `以下の日本語テキストに◆などの記号が誤って挿入されています。文脈から正しい日本語に修正してください。
-JSON形式で返してください：{"c":["修正後0","修正後1",...]}
-例：「バージ◆◆◆ンアップ」→「バージョンアップ」、「担当◆◆補」→「担当候補」
+  // U+FFDDを〓に変換してプロンプトに入れる（JSONエスケープ問題を回避）
+  const sanitized = toCorrect.map(s => s.replace(/�/g, '〓'));
+  const prompt = `次の番号付きテキストで、〓は文字化けです。文脈から正しい日本語に直してください。
+必ず以下の形式のJSONのみ返してください（説明文不要）：
+{"c":["0番目の修正後","1番目の修正後","2番目の修正後",...]}
 
-${toCorrect.map((s, i) => `${i}: ${s}`).join('\n')}`;
+例：{"c":["バージョンアップ","担当候補","社会的影響"]}
+
+${sanitized.map((s, i) => `${i}: ${s}`).join('\n')}`;
 
   return new Promise(resolve => {
     const bodyObj = {
@@ -521,6 +525,7 @@ ${toCorrect.map((s, i) => `${i}: ${s}`).join('\n')}`;
           const text = (parsed.candidates?.[0]?.content?.parts || [])
             .filter(p => p.text).map(p => p.text).join('');
           console.log(`  ℹ 校正レスポンス長: ${text.length}文字`);
+          console.log(`  ℹ 校正レスポンス内容: ${text.slice(0, 300)}`);
           // U+FFDDを直接置換（JSON解析失敗時のフォールバック）
           let corrected = decoded.replace(/�+/g, m => '？'.repeat(Math.min(m.length, 2)));
           const jsonMatch = text.match(/\{"c":\s*\[[\s\S]*?\]\}/);
