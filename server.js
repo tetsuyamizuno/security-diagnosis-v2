@@ -458,31 +458,27 @@ async function fetchHeaders(targetUrl) {
   });
 }
 
-// ── Anthropic API呼び出し ────────────────────────────
+// ── Gemini API呼び出し ──────────────────────────────
 async function callClaude(userMessage, model, apiKey, simpleMode = false) {
   return new Promise((resolve, reject) => {
     const resolvedKey = apiKey || API_KEY;
-    if (!resolvedKey) { reject(new Error('APIキーが設定されていません。入力欄にAPIキーを入力してください。')); return; }
-    // シンプル版：Web検索1回 / 標準版：検索なし（1回制限で混乱するため）
-    const tools = simpleMode
-      ? [{ type: 'web_search_20250305', name: 'web_search', max_uses: 1 }]
-      : [];
+    if (!resolvedKey) { reject(new Error('APIキーが設定されていません。入力欄にGemini APIキーを入力してください。')); return; }
+
+    // 標準版・シンプル版ともにGoogle Search grounding（Web検索1回相当）
     const bodyObj = {
-      model,
-      max_tokens: 24000,
-      system: simpleMode ? SYSTEM_PROMPT_SIMPLE : SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: userMessage }],
-      tools
+      contents: [{ role: 'user', parts: [{ text: userMessage }] }],
+      systemInstruction: { parts: [{ text: simpleMode ? SYSTEM_PROMPT_SIMPLE : SYSTEM_PROMPT }] },
+      generationConfig: { maxOutputTokens: 24000, temperature: 0.7 },
+      tools: [{ google_search: {} }]
     };
     const bodyStr = JSON.stringify(bodyObj);
+    const modelName = model || 'gemini-2.0-flash';
     const options = {
-      hostname: 'api.anthropic.com',
-      path: '/v1/messages',
+      hostname: 'generativelanguage.googleapis.com',
+      path: `/v1beta/models/${modelName}:generateContent?key=${resolvedKey}`,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': resolvedKey,
-        'anthropic-version': '2023-06-01',
         'Content-Length': Buffer.byteLength(bodyStr)
       }
     };
@@ -493,8 +489,8 @@ async function callClaude(userMessage, model, apiKey, simpleMode = false) {
         try {
           const parsed = JSON.parse(data);
           if (parsed.error) { reject(new Error(`API エラー: ${parsed.error.message}`)); return; }
-          const text = (parsed.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
-          // HTMLドキュメントが返ってきた場合はそのまま、そうでなければテキストとして返す
+          const text = (parsed.candidates?.[0]?.content?.parts || [])
+            .filter(p => p.text).map(p => p.text).join('\n');
           resolve(text);
         } catch(e) { reject(new Error(`レスポンスのパースに失敗: ${e.message}`)); }
       });
