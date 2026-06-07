@@ -469,7 +469,7 @@ async function callClaude(userMessage, model, apiKey, simpleMode = false) {
       contents: [{ role: 'user', parts: [{ text: userMessage }] }],
       systemInstruction: { parts: [{ text: simpleMode ? SYSTEM_PROMPT_SIMPLE : SYSTEM_PROMPT }] },
       generationConfig: { maxOutputTokens: 24000, temperature: 0.7 },
-      tools: [{ google_search: {} }]
+      tools: [{ googleSearch: {} }]
     };
     const bodyStr = JSON.stringify(bodyObj);
     const modelName = model || 'gemini-2.0-flash';
