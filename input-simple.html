@@ -350,10 +350,11 @@
     <div class="sidebar-section">
       <div class="sidebar-label">使用モデル</div>
       <select class="sb-select" id="model">
-        <option value="gemini-2.0-flash" selected>Gemini 2.0 Flash — 高速推奨</option>
-        <option value="gemini-2.5-flash-preview-05-20">Gemini 2.5 Flash — バランス</option>
-        <option value="gemini-2.5-pro-preview-06-05">Gemini 2.5 Pro — 最高精度</option>
-        <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+        <option value="gemini-3.0-flash" selected>Gemini 3.0 Flash — 高速推奨</option>
+        <option value="gemini-3.0-pro">Gemini 3.0 Pro — 最高精度</option>
+        <option value="gemini-2.5-flash-preview-05-20">Gemini 2.5 Flash</option>
+        <option value="gemini-2.5-pro-preview-06-05">Gemini 2.5 Pro</option>
+        <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
       </select>
     </div>
 
@@ -454,7 +455,11 @@
 // ── APIキー ──
 const apiKeyEl = document.getElementById('apiKey');
 const toggleKeyBtn = document.getElementById('toggleKey');
-try { const k = localStorage.getItem('diag_apikey'); if (k) apiKeyEl.value = k; } catch(e){}
+try {
+  const k = localStorage.getItem('diag_apikey');
+  if (k && k.startsWith('sk-ant-')) { localStorage.removeItem('diag_apikey'); }
+  else if (k) { apiKeyEl.value = k; }
+} catch(e){}
 apiKeyEl.addEventListener('change', () => { try { localStorage.setItem('diag_apikey', apiKeyEl.value.trim()); } catch(e){} });
 apiKeyEl.addEventListener('blur',   () => { try { localStorage.setItem('diag_apikey', apiKeyEl.value.trim()); } catch(e){} });
 toggleKeyBtn.addEventListener('click', () => { apiKeyEl.type = apiKeyEl.type === 'password' ? 'text' : 'password'; });
@@ -520,7 +525,7 @@ try {
   if (mdl) {
     const modelEl = document.getElementById('model');
     const exists = Array.from(modelEl.options).some(o => o.value === mdl);
-    modelEl.value = exists ? mdl : 'claude-sonnet-4-6';
+    modelEl.value = exists ? mdl : 'gemini-3.0-flash';
   }
 } catch(e){}
 document.getElementById('model').addEventListener('change', () => {
