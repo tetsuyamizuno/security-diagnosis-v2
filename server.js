@@ -463,11 +463,13 @@ async function callClaude(userMessage, model, apiKey, simpleMode = false) {
   return new Promise((resolve, reject) => {
     const resolvedKey = apiKey || API_KEY;
     if (!resolvedKey) { reject(new Error('APIキーが設定されていません。入力欄にAPIキーを入力してください。')); return; }
-    // 詳細版・シンプル版ともにWeb検索1回
-    const tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 1 }];
+    // シンプル版：Web検索1回 / 標準版：検索なし（1回制限で混乱するため）
+    const tools = simpleMode
+      ? [{ type: 'web_search_20250305', name: 'web_search', max_uses: 1 }]
+      : [];
     const bodyObj = {
       model,
-      max_tokens: 20000,
+      max_tokens: 24000,
       system: simpleMode ? SYSTEM_PROMPT_SIMPLE : SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userMessage }],
       tools
