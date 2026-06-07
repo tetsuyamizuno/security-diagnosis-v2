@@ -525,9 +525,9 @@
     </div>
 
     <div class="sidebar-section">
-      <div class="sidebar-label">Deep Research</div>
+      <div class="sidebar-label">AI診断</div>
       <div class="safety-note" style="background:rgba(26,122,110,.12);border-color:rgba(26,122,110,.3);">
-        <strong style="color:#5ec4b8;">常時オン</strong><span style="color:rgba(242,240,235,.6);font-size:13px;"> — 最新CVE・公的統計・実在事例をWeb検索で裏取りします。数分かかることがあります。</span>
+        <strong style="color:#5ec4b8;">Claude の知識で分析</strong><span style="color:rgba(242,240,235,.6);font-size:13px;"> — 学習済みのCVE・統計・事例をもとにレポートを生成します。約1〜2分で完了します。</span>
       </div>
     </div>
 
@@ -803,7 +803,7 @@ runBtn.addEventListener('click', async () => {
   errEl.classList.remove('show');
   runBtn.disabled = true;
   statusEl.classList.add('show');
-  statusText.textContent = '🔍 Deep Research 実行中… CVE・公的統計・実在事例をWeb検索で調査しています（数分かかります）';
+  statusText.textContent = 'AIがレポートを生成中です… しばらくお待ちください（1〜2分）';
 
   const noteParts = [
     document.getElementById('noteType').value,

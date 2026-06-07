@@ -541,7 +541,7 @@ runBtn.addEventListener('click', async () => {
   errEl.classList.remove('show');
   runBtn.disabled = true;
   statusEl.classList.add('show');
-  statusText.textContent = '🔍 診断中… リスク評価・原因・対応策を生成しています（1〜2分かかります）';
+  statusText.textContent = 'AIがレポートを生成中です… しばらくお待ちください（1〜2分）';
 
   try {
     const res = await fetch(getEndpointUrl() + '/diagnose', {
