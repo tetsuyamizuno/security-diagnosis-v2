@@ -460,35 +460,48 @@ async function fetchHeaders(targetUrl) {
 
 // ── 自動校正：◆を含むテキスト箇所を修正 ──────────────
 async function correctGarbledText(html, apiKey, model) {
-  // HTML全体に◆系文字があるか確認（タグ内外問わず）
-  const garbledRe = /[■-◿]/g;
-  const allMatches = html.match(garbledRe);
-  if (!allMatches) { console.log('  ℹ 文字化けなし'); return html; }
-  console.log(`  ✏️ 文字化け文字 ${allMatches.length}個を検出`);
+  // HTMLエンティティをデコードしてから検索（&#9670; 等の形式に対応）
+  const decoded = html
+    .replace(/&#(\d+);/g, (m, n) => String.fromCharCode(parseInt(n, 10)))
+    .replace(/&#x([0-9A-Fa-f]+);/gi, (m, n) => String.fromCharCode(parseInt(n, 16)));
 
-  // テキストノードから問題箇所を収集
-  const garbled = [];
-  const re = />([^<]*[■-◿][^<]*)</g;
-  let m;
-  while ((m = re.exec(html)) !== null) {
-    if (m[1].trim()) garbled.push(m[1]);
+  // デコード済みHTMLから全テキストノードを抽出（3〜300文字）
+  const segments = [];
+  const seen = new Set();
+  const textRe = />([^<]{3,300})</g;
+  let tm;
+  while ((tm = textRe.exec(decoded)) !== null) {
+    const t = tm[1].trim();
+    if (t && !seen.has(t)) { seen.add(t); segments.push(t); }
   }
-  if (garbled.length === 0) { console.log('  ℹ 文字化けなし（タグ内のみ）'); return html; }
-  console.log(`  ✏️ ${garbled.length}箇所の文字化けを校正中...`);
+  if (segments.length === 0) { console.log('  ℹ 校正対象テキストなし'); return html; }
 
-  const prompt = `以下の日本語テキストに◆などの不正な記号が混入しています。文脈から正しい日本語に修正してください。
-修正後のテキストをJSON形式で返してください：{"c":["修正後1","修正後2",...]}
-記号が装飾目的の場合は削除し、文字の置き換えの場合は正しい文字に戻してください。
+  // ◆の有無をチェック
+  const hasGarbled = /[■-◿]/.test(decoded);
+  console.log(`  ✏️ ${segments.length}件のテキストを校正中...（◆${hasGarbled ? 'あり' : 'なし'}）`);
 
-${garbled.map((s, i) => `${i}: ${s}`).join('\n')}`;
+  // 最大60件に絞る
+  const toCorrect = segments.slice(0, 60);
+
+  const prompt = `以下の日本語テキストを校正してください。
+修正対象：
+1. ◆など記号が文字の代わりに挿入されている → 文脈から正しい文字に置き換え（例：「バージ◆◆◆ンアップ」→「バージョンアップ」）
+2. 明らかな脱字 → 補完（例：「フロントエンドエンジニ」→「フロントエンドエンジニア」）
+3. 明らかな誤字 → 修正
+
+修正不要なテキストはそのまま返してください。
+JSON形式で返してください：{"c":["修正後0","修正後1",...]}
+必ずインデックス0から順に全件返してください。
+
+${toCorrect.map((s, i) => `${i}: ${s}`).join('\n')}`;
 
   return new Promise(resolve => {
     const bodyObj = {
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: 2000, temperature: 0.1 }
+      generationConfig: { maxOutputTokens: 4000, temperature: 0.1 }
     };
     const bodyStr = JSON.stringify(bodyObj);
-    const modelName = model || 'gemini-2.0-flash';
+    const modelName = model || 'gemini-3.5-flash';
     const options = {
       hostname: 'generativelanguage.googleapis.com',
       path: `/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
@@ -506,10 +519,12 @@ ${garbled.map((s, i) => `${i}: ${s}`).join('\n')}`;
           const jsonMatch = text.match(/\{"c":\s*\[[\s\S]*?\]\}/);
           if (!jsonMatch) { resolve(html); return; }
           const corrections = JSON.parse(jsonMatch[0]).c;
-          let corrected = html;
+          // デコード済みHTMLに対して校正を適用
+          let corrected = decoded;
           garbled.forEach((orig, i) => {
             if (corrections[i] && corrections[i] !== orig) {
-              corrected = corrected.replace(`>${orig}<`, `>${corrections[i]}<`);
+              const escaped = orig.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              corrected = corrected.replace(new RegExp(escaped, 'g'), corrections[i]);
             }
           });
           console.log('  ✅ 校正完了');
