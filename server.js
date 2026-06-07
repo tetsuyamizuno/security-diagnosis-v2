@@ -465,20 +465,29 @@ async function correctGarbledText(html, apiKey, model) {
     .replace(/&#(\d+);/g, (m, n) => String.fromCharCode(parseInt(n, 10)))
     .replace(/&#x([0-9A-Fa-f]+);/gi, (m, n) => String.fromCharCode(parseInt(n, 16)));
 
-  // ◆を含むテキストノードのみ抽出（前後30文字の文脈付き）
+  // 広範囲の文字化け検出（U+2500-U+27FF: Box/Geometric/Symbols/Dingbats + FFFD）
+  const GARBLED_RE = /[─-⟿�]/g;
+  const plainText = decoded.replace(/<[^>]+>/g, ' ');
+
+  // 全体チェック
+  const allFound = plainText.match(GARBLED_RE) || [];
+  if (allFound.length === 0) { console.log('  ℹ 文字化けなし'); return html; }
+  const uniq = [...new Set(allFound)].map(c => `U+${c.charCodeAt(0).toString(16).toUpperCase()}`).join(' ');
+  console.log(`  ✏️ 文字化け ${allFound.length}個検出: ${uniq}`);
+
+  // 文脈付きで抽出
   const garbled = [];
   const seen = new Set();
-  const re2 = /[■-◿]/g;
+  const re2 = /[─-⟿�]/g;
   let m2;
-  while ((m2 = re2.exec(decoded.replace(/<[^>]+>/g, ' '))) !== null) {
-    const pt = decoded.replace(/<[^>]+>/g, ' ');
+  while ((m2 = re2.exec(plainText)) !== null) {
     const start = Math.max(0, m2.index - 30);
-    const end = Math.min(pt.length, m2.index + 30);
-    const ctx = pt.slice(start, end).trim();
+    const end = Math.min(plainText.length, m2.index + 30);
+    const ctx = plainText.slice(start, end).trim();
     if (ctx && !seen.has(ctx)) { seen.add(ctx); garbled.push(ctx); }
   }
-  if (garbled.length === 0) { console.log('  ℹ 文字化けなし（タグ内のみ）'); return html; }
-  console.log(`  ✏️ ${garbled.length}箇所の◆を校正中...`);
+  if (garbled.length === 0) { console.log('  ℹ タグ内のみのため校正スキップ'); return html; }
+  console.log(`  ✏️ ${garbled.length}箇所を校正中...`);
 
   const toCorrect = garbled.slice(0, 20);
 
