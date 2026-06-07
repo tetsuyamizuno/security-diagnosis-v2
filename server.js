@@ -515,26 +515,38 @@ ${toCorrect.map((s, i) => `${i}: ${s}`).join('\n')}`;
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
         try {
+          console.log(`  ℹ 校正API応答: HTTP ${res.statusCode}`);
           const parsed = JSON.parse(data);
+          if (parsed.error) { console.log('  ⚠ 校正APIエラー:', parsed.error.message); resolve(html); return; }
           const text = (parsed.candidates?.[0]?.content?.parts || [])
             .filter(p => p.text).map(p => p.text).join('');
+          console.log(`  ℹ 校正レスポンス長: ${text.length}文字`);
+          // U+FFDDを直接置換（JSON解析失敗時のフォールバック）
+          let corrected = decoded.replace(/�+/g, m => '？'.repeat(Math.min(m.length, 2)));
           const jsonMatch = text.match(/\{"c":\s*\[[\s\S]*?\]\}/);
-          if (!jsonMatch) { resolve(html); return; }
-          const corrections = JSON.parse(jsonMatch[0]).c;
-          // デコード済みHTMLに対して校正を適用
-          let corrected = decoded;
-          garbled.forEach((orig, i) => {
-            if (corrections[i] && corrections[i] !== orig) {
-              const escaped = orig.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-              corrected = corrected.replace(new RegExp(escaped, 'g'), corrections[i]);
-            }
-          });
-          console.log('  ✅ 校正完了');
+          if (jsonMatch) {
+            const corrections = JSON.parse(jsonMatch[0]).c;
+            corrected = decoded;
+            garbled.forEach((orig, i) => {
+              if (corrections[i] && corrections[i] !== orig) {
+                const escaped = orig.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                corrected = corrected.replace(new RegExp(escaped, 'g'), corrections[i]);
+              }
+            });
+            console.log('  ✅ 校正完了（JSON）');
+          } else {
+            console.log('  ⚠ JSON解析失敗 - U+FFFDを？に置換');
+          }
           resolve(corrected);
-        } catch(e) { console.log('  ⚠ 校正エラー:', e.message, data.slice(0, 200)); resolve(html); }
+        } catch(e) { console.log('  ⚠ 校正エラー:', e.message); resolve(html); }
       });
     });
-    req.on('error', () => resolve(html));
+    req.setTimeout(30000, () => {
+      console.log('  ⚠ 校正タイムアウト（30秒）- U+FFFDを？に置換');
+      req.destroy();
+      resolve(decoded.replace(/�+/g, '？'));
+    });
+    req.on('error', (e) => { console.log('  ⚠ 校正リクエストエラー:', e.message); resolve(html); });
     req.write(bodyStr);
     req.end();
   });
