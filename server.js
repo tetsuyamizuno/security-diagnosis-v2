@@ -460,14 +460,20 @@ async function fetchHeaders(targetUrl) {
 
 // ── 自動校正：◆を含むテキスト箇所を修正 ──────────────
 async function correctGarbledText(html, apiKey, model) {
-  // ◆系文字を含むテキストノードを収集
+  // HTML全体に◆系文字があるか確認（タグ内外問わず）
+  const garbledRe = /[■-◿]/g;
+  const allMatches = html.match(garbledRe);
+  if (!allMatches) { console.log('  ℹ 文字化けなし'); return html; }
+  console.log(`  ✏️ 文字化け文字 ${allMatches.length}個を検出`);
+
+  // テキストノードから問題箇所を収集
   const garbled = [];
-  const re = />([^<]*[◆◇●■▲▼★☆][^<]*)</g;
+  const re = />([^<]*[■-◿][^<]*)</g;
   let m;
   while ((m = re.exec(html)) !== null) {
     if (m[1].trim()) garbled.push(m[1]);
   }
-  if (garbled.length === 0) { console.log('  ℹ 文字化けなし'); return html; }
+  if (garbled.length === 0) { console.log('  ℹ 文字化けなし（タグ内のみ）'); return html; }
   console.log(`  ✏️ ${garbled.length}箇所の文字化けを校正中...`);
 
   const prompt = `以下の日本語テキストに◆などの不正な記号が混入しています。文脈から正しい日本語に修正してください。
@@ -527,7 +533,7 @@ async function callClaude(userMessage, model, apiKey, simpleMode = false) {
     const bodyObj = {
       contents: [{ role: 'user', parts: [{ text: userMessage }] }],
       systemInstruction: { parts: [{ text: simpleMode ? SYSTEM_PROMPT_SIMPLE : SYSTEM_PROMPT }] },
-      generationConfig: { maxOutputTokens: 24000, temperature: 0.7 },
+      generationConfig: { maxOutputTokens: 32000, temperature: 0.7 },
       tools: [{ googleSearch: {} }]
     };
     const bodyStr = JSON.stringify(bodyObj);
