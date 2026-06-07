@@ -458,6 +458,65 @@ async function fetchHeaders(targetUrl) {
   });
 }
 
+// ── 自動校正：◆を含むテキスト箇所を修正 ──────────────
+async function correctGarbledText(html, apiKey, model) {
+  // ◆系文字を含むテキストノードを収集
+  const garbled = [];
+  const re = />([^<]*[◆◇●■▲▼★☆][^<]*)</g;
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    if (m[1].trim()) garbled.push(m[1]);
+  }
+  if (garbled.length === 0) { console.log('  ℹ 文字化けなし'); return html; }
+  console.log(`  ✏️ ${garbled.length}箇所の文字化けを校正中...`);
+
+  const prompt = `以下の日本語テキストに◆などの不正な記号が混入しています。文脈から正しい日本語に修正してください。
+修正後のテキストをJSON形式で返してください：{"c":["修正後1","修正後2",...]}
+記号が装飾目的の場合は削除し、文字の置き換えの場合は正しい文字に戻してください。
+
+${garbled.map((s, i) => `${i}: ${s}`).join('\n')}`;
+
+  return new Promise(resolve => {
+    const bodyObj = {
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: { maxOutputTokens: 2000, temperature: 0.1 }
+    };
+    const bodyStr = JSON.stringify(bodyObj);
+    const modelName = model || 'gemini-2.0-flash';
+    const options = {
+      hostname: 'generativelanguage.googleapis.com',
+      path: `/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(bodyStr) }
+    };
+    const req = https.request(options, res => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          const text = (parsed.candidates?.[0]?.content?.parts || [])
+            .filter(p => p.text).map(p => p.text).join('');
+          const jsonMatch = text.match(/\{"c":\s*\[[\s\S]*?\]\}/);
+          if (!jsonMatch) { resolve(html); return; }
+          const corrections = JSON.parse(jsonMatch[0]).c;
+          let corrected = html;
+          garbled.forEach((orig, i) => {
+            if (corrections[i] && corrections[i] !== orig) {
+              corrected = corrected.replace(`>${orig}<`, `>${corrections[i]}<`);
+            }
+          });
+          console.log('  ✅ 校正完了');
+          resolve(corrected);
+        } catch(e) { console.log('  ⚠ 校正エラー:', e.message); resolve(html); }
+      });
+    });
+    req.on('error', () => resolve(html));
+    req.write(bodyStr);
+    req.end();
+  });
+}
+
 // ── Gemini API呼び出し ──────────────────────────────
 async function callClaude(userMessage, model, apiKey, simpleMode = false) {
   return new Promise((resolve, reject) => {
@@ -602,9 +661,28 @@ const server = http.createServer(async (req, res) => { // eslint-disable-line
           }
         }
 
+        // HTMLタグ間のテキストのみ◆系文字を除去（タグ属性・CSS等は保持）
+        finalReport = finalReport.replace(/>([^<]+)</g, (match, text) => {
+          const cleaned = text
+            .replace(/◆+/g, '')
+            .replace(/◇+/g, '')
+            .replace(/●+/g, '')
+            .replace(/■+/g, '')
+            .replace(/▲+/g, '')
+            .replace(/▼+/g, '')
+            .replace(/★+/g, '')
+            .replace(/☆+/g, '');
+          return `>${cleaned}<`;
+        });
+
         // HTMLドキュメントかどうか判定
         const trimmed = finalReport.trimStart();
         const isHtml = trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html');
+
+        // 自動校正（◆文字化けを修正）
+        if (isHtml && config.apiKey) {
+          finalReport = await correctGarbledText(finalReport, config.apiKey, config.model);
+        }
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ report: finalReport, isHtml }));
 
