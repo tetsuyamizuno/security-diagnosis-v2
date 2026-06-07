@@ -526,7 +526,7 @@
     <div class="sidebar-section">
       <div class="sidebar-label">AI診断</div>
       <div class="safety-note" style="background:rgba(26,122,110,.12);border-color:rgba(26,122,110,.3);">
-        <strong style="color:#5ec4b8;">Gemini で分析</strong><span style="color:rgba(242,240,235,.6);font-size:13px;"> — Google Search連携でCVE・統計・事例を調査し、レポートを生成します。</span>
+        <strong style="color:#5ec4b8;">Gemini で分析</strong><span style="color:rgba(242,240,235,.6);font-size:13px;"> — HTMLソース・HTTPヘッダーを取得し、AIがセキュリティリスクを分析してレポートを生成します。</span>
       </div>
     </div>
 
@@ -763,7 +763,7 @@ document.querySelectorAll('.main input[type=url], .main input[type=text], .main 
   el.addEventListener('change', () => updateHasValue(el));
 });
 
-// ── モード・検索トグルは廃止（常時 Deep Research）──
+// ── モード・検索トグルは廃止 ──
 
 // ── 所有区分 ──
 let ownership = '';

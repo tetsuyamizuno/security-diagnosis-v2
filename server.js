@@ -655,7 +655,7 @@ const server = http.createServer(async (req, res) => { // eslint-disable-line
         console.log('   取得完了');
 
         // STEP3: Claude API呼び出し（常時 Deep Research）
-        console.log('🔍 Deep Research + レポート作成中…（数分かかります）');
+        console.log('🤖 Geminiがレポートを作成中…（数分かかります）');
         const userMessage = buildUserMessage(config, pageHtml, headers);
         const report = await callClaude(userMessage, config.model, config.apiKey, config.simpleMode);
         console.log('✅ レポート生成完了');
