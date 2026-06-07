@@ -456,7 +456,7 @@ async function callClaude(userMessage, model, apiKey, simpleMode = false) {
     const tools = [];
     const bodyObj = {
       model,
-      max_tokens: 12000,
+      max_tokens: 20000,
       system: simpleMode ? SYSTEM_PROMPT_SIMPLE : SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userMessage }],
       tools
