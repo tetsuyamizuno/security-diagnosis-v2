@@ -465,33 +465,26 @@ async function correctGarbledText(html, apiKey, model) {
     .replace(/&#(\d+);/g, (m, n) => String.fromCharCode(parseInt(n, 10)))
     .replace(/&#x([0-9A-Fa-f]+);/gi, (m, n) => String.fromCharCode(parseInt(n, 16)));
 
-  // デコード済みHTMLから全テキストノードを抽出（3〜300文字）
-  const segments = [];
+  // ◆を含むテキストノードのみ抽出（前後30文字の文脈付き）
+  const garbled = [];
   const seen = new Set();
-  const textRe = />([^<]{3,300})</g;
-  let tm;
-  while ((tm = textRe.exec(decoded)) !== null) {
-    const t = tm[1].trim();
-    if (t && !seen.has(t)) { seen.add(t); segments.push(t); }
+  const re2 = /[■-◿]/g;
+  let m2;
+  while ((m2 = re2.exec(decoded.replace(/<[^>]+>/g, ' '))) !== null) {
+    const pt = decoded.replace(/<[^>]+>/g, ' ');
+    const start = Math.max(0, m2.index - 30);
+    const end = Math.min(pt.length, m2.index + 30);
+    const ctx = pt.slice(start, end).trim();
+    if (ctx && !seen.has(ctx)) { seen.add(ctx); garbled.push(ctx); }
   }
-  if (segments.length === 0) { console.log('  ℹ 校正対象テキストなし'); return html; }
+  if (garbled.length === 0) { console.log('  ℹ 文字化けなし（タグ内のみ）'); return html; }
+  console.log(`  ✏️ ${garbled.length}箇所の◆を校正中...`);
 
-  // ◆の有無をチェック
-  const hasGarbled = /[■-◿]/.test(decoded);
-  console.log(`  ✏️ ${segments.length}件のテキストを校正中...（◆${hasGarbled ? 'あり' : 'なし'}）`);
+  const toCorrect = garbled.slice(0, 20);
 
-  // 最大60件に絞る
-  const toCorrect = segments.slice(0, 60);
-
-  const prompt = `以下の日本語テキストを校正してください。
-修正対象：
-1. ◆など記号が文字の代わりに挿入されている → 文脈から正しい文字に置き換え（例：「バージ◆◆◆ンアップ」→「バージョンアップ」）
-2. 明らかな脱字 → 補完（例：「フロントエンドエンジニ」→「フロントエンドエンジニア」）
-3. 明らかな誤字 → 修正
-
-修正不要なテキストはそのまま返してください。
+  const prompt = `以下の日本語テキストに◆などの記号が誤って挿入されています。文脈から正しい日本語に修正してください。
 JSON形式で返してください：{"c":["修正後0","修正後1",...]}
-必ずインデックス0から順に全件返してください。
+例：「バージ◆◆◆ンアップ」→「バージョンアップ」、「担当◆◆補」→「担当候補」
 
 ${toCorrect.map((s, i) => `${i}: ${s}`).join('\n')}`;
 
