@@ -472,7 +472,7 @@ async function callClaude(userMessage, model, apiKey, simpleMode = false) {
       tools: [{ googleSearch: {} }]
     };
     const bodyStr = JSON.stringify(bodyObj);
-    const modelName = model || 'gemini-2.0-flash';
+    const modelName = model || 'gemini-3.5-flash';
     const options = {
       hostname: 'generativelanguage.googleapis.com',
       path: `/v1beta/models/${modelName}:generateContent?key=${resolvedKey}`,
