@@ -433,18 +433,30 @@ async function fetchPage(targetUrl) {
   });
 }
 
-// ── HTTPヘッダー取得 ──────────────────────────────────
-function fetchHeaders(targetUrl) {
-  try {
-    const result = execSync(
-      `curl -s -I -L --max-time 10 --user-agent "Mozilla/5.0" "${targetUrl}" 2>&1`,
-      { encoding: 'utf8', timeout: 15000 }
-    );
-    return result.slice(0, 5000);
-  } catch(e) {
-    console.log('  ⚠ ヘッダー取得エラー');
-    return '';
-  }
+// ── HTTPヘッダー取得（Node.js標準モジュール使用・curl不要）──
+async function fetchHeaders(targetUrl) {
+  return new Promise(resolve => {
+    try {
+      const client = targetUrl.startsWith('https') ? https : http;
+      const req = client.request(targetUrl, {
+        method: 'HEAD',
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SecurityReviewBot/1.0)' },
+        timeout: 10000
+      }, res => {
+        let result = `HTTP/${res.httpVersion} ${res.statusCode} ${res.statusMessage}\r\n`;
+        Object.entries(res.headers).forEach(([k, v]) => {
+          result += `${k}: ${Array.isArray(v) ? v.join(', ') : v}\r\n`;
+        });
+        resolve(result.slice(0, 5000));
+      });
+      req.on('error', e => { console.log(`  ⚠ ヘッダー取得エラー: ${e.message}`); resolve(''); });
+      req.on('timeout', () => { req.destroy(); resolve(''); });
+      req.end();
+    } catch(e) {
+      console.log('  ⚠ ヘッダー取得エラー');
+      resolve('');
+    }
+  });
 }
 
 // ── Anthropic API呼び出し ────────────────────────────
@@ -560,7 +572,7 @@ const server = http.createServer(async (req, res) => { // eslint-disable-line
 
         // STEP2: ヘッダー取得
         console.log('📋 HTTPヘッダーを確認中...');
-        const headers = fetchHeaders(config.url);
+        const headers = await fetchHeaders(config.url);
         console.log('   取得完了');
 
         // STEP3: Claude API呼び出し（常時 Deep Research）
