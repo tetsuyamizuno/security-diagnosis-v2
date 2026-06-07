@@ -531,7 +531,7 @@ ${toCorrect.map((s, i) => `${i}: ${s}`).join('\n')}`;
           });
           console.log('  ✅ 校正完了');
           resolve(corrected);
-        } catch(e) { console.log('  ⚠ 校正エラー:', e.message); resolve(html); }
+        } catch(e) { console.log('  ⚠ 校正エラー:', e.message, data.slice(0, 200)); resolve(html); }
       });
     });
     req.on('error', () => resolve(html));
@@ -550,8 +550,8 @@ async function callClaude(userMessage, model, apiKey, simpleMode = false) {
     const bodyObj = {
       contents: [{ role: 'user', parts: [{ text: userMessage }] }],
       systemInstruction: { parts: [{ text: simpleMode ? SYSTEM_PROMPT_SIMPLE : SYSTEM_PROMPT }] },
-      generationConfig: { maxOutputTokens: 32000, temperature: 0.7 },
-      tools: [{ googleSearch: {} }]
+      generationConfig: { maxOutputTokens: 32000, temperature: 0.7 }
+      // googleSearch一時停止（U+FFFD原因調査）
     };
     const bodyStr = JSON.stringify(bodyObj);
     const modelName = model || 'gemini-3.5-flash';
