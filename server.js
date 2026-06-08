@@ -740,6 +740,7 @@ const server = http.createServer(async (req, res) => { // eslint-disable-line
     '/':                  { file: 'input.html',        type: 'text/html; charset=utf-8' },
     '/input.html':        { file: 'input.html',        type: 'text/html; charset=utf-8' },
     '/input-simple.html': { file: 'input-simple.html', type: 'text/html; charset=utf-8' },
+    '/input2.html':       { file: 'input2.html',       type: 'text/html; charset=utf-8' },
   };
   if (req.method === 'GET' && staticFiles[parsedUrl.pathname]) {
     const { file, type } = staticFiles[parsedUrl.pathname];
