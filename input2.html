@@ -529,10 +529,11 @@ runBtn.addEventListener('click', async () => {
   errEl.classList.remove('show');
   runBtn.disabled = true;
   statusEl.classList.add('show');
-  statusText.textContent = 'AIがレポートを生成中です… しばらくお待ちください（1〜2分）';
+  statusText.textContent = 'AIがレポートを生成中です… しばらくお待ちください（2〜3分）';
 
   try {
-    const res = await fetch(getEndpointUrl() + '/diagnose', {
+    // STEP1: ジョブ開始（すぐに jobId が返る）
+    const startRes = await fetch(getEndpointUrl() + '/diagnose', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -543,15 +544,35 @@ runBtn.addEventListener('click', async () => {
         model: document.getElementById('model').value,
         apiKey: apiKeyEl.value.trim(),
         simpleMode: false,
-        standardMode2: true   // ← 標準版v2フラグ
+        standardMode2: true
       })
     });
-    if (!res.ok) {
-      const t = await res.text();
-      throw new Error(`サーバーエラー（${res.status}）: ${t.slice(0,200)}`);
+    if (!startRes.ok) {
+      const t = await startRes.text();
+      throw new Error(`サーバーエラー（${startRes.status}）: ${t.slice(0,200)}`);
     }
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
+    const startData = await startRes.json();
+    if (startData.error) throw new Error(startData.error);
+    const jobId = startData.jobId;
+
+    // STEP2: ポーリング（3秒ごとに結果を確認）
+    let elapsed = 0;
+    const dots = ['', '.', '..', '...'];
+    const data = await new Promise((resolve, reject) => {
+      const timer = setInterval(async () => {
+        elapsed += 3;
+        statusText.textContent = `AIがレポートを生成中です${dots[Math.floor(elapsed/3) % 4]} （${elapsed}秒経過）`;
+        try {
+          const pollRes = await fetch(getEndpointUrl() + '/result/' + jobId);
+          if (!pollRes.ok) { clearInterval(timer); reject(new Error(`ポーリングエラー: ${pollRes.status}`)); return; }
+          const pollData = await pollRes.json();
+          if (pollData.status === 'done') { clearInterval(timer); resolve(pollData); }
+          else if (pollData.status === 'error') { clearInterval(timer); reject(new Error(pollData.error || '診断エラー')); }
+          // status === 'running' の場合は継続
+          if (elapsed > 360) { clearInterval(timer); reject(new Error('タイムアウト（6分）。もう一度お試しください。')); }
+        } catch(pe) { clearInterval(timer); reject(pe); }
+      }, 3000);
+    });
 
     if (data.isHtml) {
       const blob    = new Blob([data.report], { type: 'text/html; charset=utf-8' });

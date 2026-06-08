@@ -744,112 +744,78 @@ ${headers || '（取得できませんでした。各ヘッダー項目は「未
 `.trim();
 }
 
-// ── HTTPサーバー ─────────────────────────────────────
-const server = http.createServer(async (req, res) => { // eslint-disable-line
+// ── ジョブストア ─────────────────────────────────────
+const diagJobs = {}; // { jobId: { status, report, isHtml, error, createdAt } }
 
-  // CORS設定（input.htmlからのリクエストを許可）
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+// バックグラウンド診断処理
+async function runDiagnosis(jobId, config) {
+  try {
+    // STEP1: ページ取得
+    console.log(`[${jobId}] 📥 ページを取得中...`);
+    const { html: pageHtml } = await fetchPage(config.url);
+    console.log(`[${jobId}]    取得完了（${pageHtml.length}文字）`);
 
-  if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+    // STEP2: ヘッダー取得
+    console.log(`[${jobId}] 📋 HTTPヘッダーを確認中...`);
+    const headers = await fetchHeaders(config.url);
+    console.log(`[${jobId}]    取得完了`);
 
-  const parsedUrl = url.parse(req.url);
+    // STEP3: Gemini API呼び出し
+    console.log(`[${jobId}] 🤖 Geminiがレポートを作成中…（数分かかります）`);
+    const userMessage = buildUserMessage(config, pageHtml, headers);
+    const report = await callClaude(userMessage, config.model, config.apiKey, config.simpleMode, config.standardMode2);
+    console.log(`[${jobId}] ✅ レポート生成完了`);
 
-  // ── /diagnose エンドポイント ──
-  if (req.method === 'POST' && parsedUrl.pathname === '/diagnose') {
-    let body = '';
-    req.on('data', chunk => body += chunk);
-    req.on('end', async () => {
-      try {
-        const config = JSON.parse(body);
-        console.log('');
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.log('  診断開始');
-        console.log(`  URL    : ${config.url}`);
-        console.log(`  区分   : ${config.ownershipLabel}`);
-        console.log(`  モデル : ${config.model}`);
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    // HTMLドキュメントを応答テキストから抽出
+    let finalReport = report;
+    const doctypeIdx = report.search(/<!DOCTYPE/i);
+    const htmlTagIdx = report.search(/<html[\s>]/i);
+    const startIdx   = doctypeIdx >= 0 ? doctypeIdx : htmlTagIdx >= 0 ? htmlTagIdx : -1;
 
-        // STEP1: ページ取得
-        console.log('📥 ページを取得中...');
-        const { html: pageHtml } = await fetchPage(config.url);
-        console.log(`   取得完了（${pageHtml.length}文字）`);
+    if (startIdx >= 0) {
+      finalReport = report.slice(startIdx).trim();
+      finalReport = finalReport.replace(/\s*```\s*$/, '');
+      if (!/\/html>/i.test(finalReport)) {
+        finalReport += '\n</body>\n</html>';
+        console.log(`[${jobId}]   ⚠ HTMLが途中で切れていたため </html> を補完しました`);
+      }
+      if (startIdx > 0) {
+        console.log(`[${jobId}]   ℹ 先頭${startIdx}文字の説明文を除去してHTMLを抽出しました`);
+      }
+    }
 
-        // STEP2: ヘッダー取得
-        console.log('📋 HTTPヘッダーを確認中...');
-        const headers = await fetchHeaders(config.url);
-        console.log('   取得完了');
+    // HTMLタグ間のテキストのみ◆系文字を除去
+    finalReport = finalReport.replace(/>([^<]+)</g, (match, text) => {
+      const cleaned = text
+        .replace(/◆+/g, '').replace(/◇+/g, '').replace(/●+/g, '').replace(/■+/g, '')
+        .replace(/▲+/g, '').replace(/▼+/g, '').replace(/★+/g, '').replace(/☆+/g, '');
+      return `>${cleaned}<`;
+    });
 
-        // STEP3: Claude API呼び出し（常時 Deep Research）
-        console.log('🤖 Geminiがレポートを作成中…（数分かかります）');
-        const userMessage = buildUserMessage(config, pageHtml, headers);
-        const report = await callClaude(userMessage, config.model, config.apiKey, config.simpleMode, config.standardMode2);
-        console.log('✅ レポート生成完了');
+    const trimmed = finalReport.trimStart();
+    const isHtml = trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html');
 
-        // HTMLドキュメントを応答テキストから抽出
-        // 前後の説明文・コードフェンスを除去し、<!DOCTYPE または <html から始まる部分を取り出す
-        let finalReport = report;
-
-        const doctypeIdx = report.search(/<!DOCTYPE/i);
-        const htmlTagIdx = report.search(/<html[\s>]/i);
-        const startIdx   = doctypeIdx >= 0 ? doctypeIdx
-                         : htmlTagIdx  >= 0 ? htmlTagIdx
-                         : -1;
-
-        if (startIdx >= 0) {
-          finalReport = report.slice(startIdx).trim();
-          // コードフェンスの閉じ ``` が末尾に残っている場合は除去
-          finalReport = finalReport.replace(/\s*```\s*$/, '');
-          // </html> がない（切れた）場合は補完
-          if (!/\/html>/i.test(finalReport)) {
-            finalReport += '\n</body>\n</html>';
-            console.log('  ⚠ HTMLが途中で切れていたため </html> を補完しました');
-          }
-          if (startIdx > 0) {
-            console.log(`  ℹ 先頭${startIdx}文字の説明文を除去してHTMLを抽出しました`);
-          }
-        }
-
-        // HTMLタグ間のテキストのみ◆系文字を除去（タグ属性・CSS等は保持）
-        finalReport = finalReport.replace(/>([^<]+)</g, (match, text) => {
-          const cleaned = text
-            .replace(/◆+/g, '')
-            .replace(/◇+/g, '')
-            .replace(/●+/g, '')
-            .replace(/■+/g, '')
-            .replace(/▲+/g, '')
-            .replace(/▼+/g, '')
-            .replace(/★+/g, '')
-            .replace(/☆+/g, '');
-          return `>${cleaned}<`;
-        });
-
-        // HTMLドキュメントかどうか判定
-        const trimmed = finalReport.trimStart();
-        const isHtml = trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html');
-
-        // ── スコア注入（standardMode2のみ・AIが出力しなかった場合） ──
-        if (isHtml && config.standardMode2) {
-          const hasScore = /健全性スコア|セキュリティスコア|score-section/i.test(finalReport);
-          if (!hasScore) {
-            const h = headers || '';
-            let hd = 0;
-            if (!h.match(/content-security-policy/i)) hd += 5;
-            if (!h.match(/x-frame-options/i))          hd += 3;
-            if (!h.match(/x-content-type-options/i))   hd += 3;
-            if (!h.match(/referrer-policy/i))           hd += 3;
-            if (!h.match(/permissions-policy/i))        hd += 2;
-            if (h.match(/x-powered-by/i))               hd += 1;
-            if (h.match(/^server:/im))                  hd += 1;
-            const high = Math.max(0, Math.round(((finalReport.match(/高リスク/g)||[]).length)/2)-1);
-            const mid  = Math.max(0, Math.round(((finalReport.match(/中リスク/g)||[]).length)/2)-1);
-            const low  = Math.max(0, Math.round(((finalReport.match(/低リスク/g)||[]).length)/2)-1);
-            const score = Math.max(0, 100 - high*15 - mid*7 - low*2 - hd);
-            const level = score>=80?'軽微なリスク':score>=60?'中程度のリスク':score>=40?'深刻なリスク':'非常に危険';
-            const color = score>=80?'#4CAF82':score>=60?'#E09F3E':'#D64045';
-            const breakdown = `高リスク${high}件、中リスク${mid}件、低リスク${low}件、ヘッダー減点${hd}点`;
-            const scoreHtml = `
+    // ── スコア注入（standardMode2のみ） ──
+    if (isHtml && config.standardMode2) {
+      const hasScore = /健全性スコア|セキュリティスコア|score-section/i.test(finalReport);
+      if (!hasScore) {
+        const h = headers || '';
+        let hd = 0;
+        if (!h.match(/content-security-policy/i)) hd += 5;
+        if (!h.match(/x-frame-options/i))          hd += 3;
+        if (!h.match(/x-content-type-options/i))   hd += 3;
+        if (!h.match(/referrer-policy/i))           hd += 3;
+        if (!h.match(/permissions-policy/i))        hd += 2;
+        if (h.match(/x-powered-by/i))               hd += 1;
+        if (h.match(/^server:/im))                  hd += 1;
+        const high = Math.max(0, Math.round(((finalReport.match(/高リスク/g)||[]).length)/2)-1);
+        const mid  = Math.max(0, Math.round(((finalReport.match(/中リスク/g)||[]).length)/2)-1);
+        const low  = Math.max(0, Math.round(((finalReport.match(/低リスク/g)||[]).length)/2)-1);
+        const score = Math.max(0, 100 - high*15 - mid*7 - low*2 - hd);
+        const level = score>=80?'軽微なリスク':score>=60?'中程度のリスク':score>=40?'深刻なリスク':'非常に危険';
+        const color = score>=80?'#4CAF82':score>=60?'#E09F3E':'#D64045';
+        const breakdown = `高リスク${high}件、中リスク${mid}件、低リスク${low}件、ヘッダー減点${hd}点`;
+        const scoreHtml = `
 <section style="background:#fff;border-radius:10px;padding:32px 40px;margin:32px auto;max-width:960px;box-shadow:0 2px 12px rgba(0,0,0,.07);">
   <h2 style="font-family:'Noto Serif JP',serif;font-size:1.3rem;color:#1E2A35;margin:0 0 8px;">セキュリティ健全性スコア</h2>
   <p style="color:#555;font-size:.9rem;margin:0 0 20px;">公開情報から判断した本サイトのセキュリティ健全性評価です。</p>
@@ -861,18 +827,18 @@ const server = http.createServer(async (req, res) => { // eslint-disable-line
   <p style="color:#2D6A8F;font-size:.9rem;margin:0 0 6px;">※ 100点満点中${score}点。${breakdown}</p>
   <p style="color:#666;font-size:.85rem;margin:0;">判定：<strong style="color:${color};">${level}</strong></p>
 </section>`;
-            if (/<body[^>]*>/i.test(finalReport)) {
-              finalReport = finalReport.replace(/<body([^>]*)>/i, (m) => m + '\n' + scoreHtml);
-            } else {
-              finalReport = scoreHtml + finalReport;
-            }
-            console.log(`  ℹ スコア注入: ${score}点（${breakdown}）`);
-          }
+        if (/<body[^>]*>/i.test(finalReport)) {
+          finalReport = finalReport.replace(/<body([^>]*)>/i, (m) => m + '\n' + scoreHtml);
+        } else {
+          finalReport = scoreHtml + finalReport;
         }
+        console.log(`[${jobId}]   ℹ スコア注入: ${score}点（${breakdown}）`);
+      }
+    }
 
-        // ── フッター削除JS注入（standardMode2のみ） ──
-        if (isHtml && config.standardMode2) {
-          const footerKiller = `
+    // ── フッター削除JS注入（standardMode2のみ） ──
+    if (isHtml && config.standardMode2) {
+      const footerKiller = `
 <script>
 (function(){
   function removeFooters(){
@@ -893,22 +859,95 @@ const server = http.createServer(async (req, res) => { // eslint-disable-line
   else{removeFooters();}
 })();
 </script>`;
-          finalReport = finalReport.replace(/<\/body>/i, footerKiller + '\n</body>');
-        }
+      finalReport = finalReport.replace(/<\/body>/i, footerKiller + '\n</body>');
+    }
 
-        // 自動校正（◆文字化けを修正）
-        if (isHtml && config.apiKey) {
-          finalReport = await correctGarbledText(finalReport, config.apiKey, config.model);
-        }
+    // 自動校正（◆文字化けを修正）
+    if (isHtml && config.apiKey) {
+      finalReport = await correctGarbledText(finalReport, config.apiKey, config.model);
+    }
+
+    diagJobs[jobId] = { status: 'done', report: finalReport, isHtml, createdAt: diagJobs[jobId]?.createdAt };
+    console.log(`[${jobId}] 🎉 ジョブ完了`);
+
+  } catch(e) {
+    console.error(`[${jobId}] ❌ エラー: ${e.message}`);
+    diagJobs[jobId] = { status: 'error', error: e.message, createdAt: diagJobs[jobId]?.createdAt };
+  }
+}
+
+// ── HTTPサーバー ─────────────────────────────────────
+const server = http.createServer(async (req, res) => { // eslint-disable-line
+
+  // CORS設定（input.htmlからのリクエストを許可）
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+
+  const parsedUrl = url.parse(req.url);
+
+  // ── ジョブストア（非同期処理用・メモリ内） ──
+  // /diagnose → jobId を即返し、バックグラウンドで処理
+  // /result/:jobId → 結果をポーリング
+
+  // ── /diagnose エンドポイント（非同期ジョブ開始） ──
+  if (req.method === 'POST' && parsedUrl.pathname === '/diagnose') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const config = JSON.parse(body);
+        const jobId = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+        // ジョブをメモリに登録
+        diagJobs[jobId] = { status: 'running', createdAt: Date.now() };
+
+        console.log('');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log(`  診断開始 [${jobId}]`);
+        console.log(`  URL    : ${config.url}`);
+        console.log(`  区分   : ${config.ownershipLabel}`);
+        console.log(`  モデル : ${config.model}`);
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+        // バックグラウンドで処理（awaitしない）
+        runDiagnosis(jobId, config);
+
+        // すぐに jobId を返す（Railwayタイムアウト回避）
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ report: finalReport, isHtml }));
-
+        res.end(JSON.stringify({ jobId }));
       } catch(e) {
         console.error(`❌ エラー: ${e.message}`);
-        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ error: e.message }));
       }
     });
+    return;
+  }
+
+  // ── /result/:jobId エンドポイント（ポーリング） ──
+  const resultMatch = parsedUrl.pathname.match(/^\/result\/([a-z0-9]+)$/);
+  if (req.method === 'GET' && resultMatch) {
+    const jobId = resultMatch[1];
+    const job = diagJobs[jobId];
+    if (!job) {
+      res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'ジョブが見つかりません' }));
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    if (job.status === 'running') {
+      res.end(JSON.stringify({ status: 'running' }));
+    } else if (job.status === 'done') {
+      res.end(JSON.stringify({ status: 'done', report: job.report, isHtml: job.isHtml }));
+      // 取得後に古いジョブを削除（メモリ節約）
+      setTimeout(() => { delete diagJobs[jobId]; }, 60000);
+    } else {
+      res.end(JSON.stringify({ status: 'error', error: job.error }));
+      setTimeout(() => { delete diagJobs[jobId]; }, 60000);
+    }
     return;
   }
 
