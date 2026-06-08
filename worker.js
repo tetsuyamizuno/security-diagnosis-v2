@@ -392,33 +392,52 @@ function extractHtml(report, headersStr, simpleMode) {
   let html = report.slice(startIdx).trim().replace(/\s*```\s*$/, '');
   if (!/\/html>/i.test(html)) html += '\n</body>\n</html>';
 
-  // ── フッター完全削除 ──────────────────────────────
-  // <footer>タグ
-  html = html.replace(/<footer[\s\S]*?<\/footer>/gi, '');
-  // footerクラス・id を持つ div/section
-  html = html.replace(/<(div|section|p)[^>]*(class|id)="[^"]*footer[^"]*"[\s\S]*?<\/\1>/gi, '');
-  // 著作権・クレジット文字列を含む要素
-  html = html.replace(/<[^>]+>\s*[©&copy;][\s\S]*?All Rights Reserved[\s\S]*?<\/[^>]+>/gi, '');
-  html = html.replace(/<[^>]+>\s*SECURITY REPORT[\s\S]*?<\/[^>]+>/gi, '');
-  // CSSでも非表示
-  html = html.replace('</style>', 'footer,div[class*="footer"],section[class*="footer"]{display:none!important}</style>');
-
   // ── スコアセクション注入（標準版のみ） ─────────────
   if (!simpleMode) {
-    const hasScore = /score-section|健全性スコア|セキュリティスコア/i.test(html);
+    const hasScore = /健全性スコア|セキュリティスコア|score-section/i.test(html);
     if (!hasScore) {
       const { score, level, color, breakdown } = calcScore(html, headersStr);
       const scoreHtml = buildScoreHtml(score, level, color, breakdown);
-      // 最初の </section> の直後に挿入
-      const insertAt = html.indexOf('</section>');
-      if (insertAt >= 0) {
-        html = html.slice(0, insertAt + 10) + scoreHtml + html.slice(insertAt + 10);
+      // <body> の直後に挿入（最も確実）
+      if (/<body[^>]*>/i.test(html)) {
+        html = html.replace(/<body([^>]*)>/i, (m) => m + '\n' + scoreHtml);
       } else {
-        // </h1> or <body> 直後にフォールバック
-        html = html.replace(/<body[^>]*>/, m => m + scoreHtml);
+        html = scoreHtml + html;
       }
     }
   }
+
+  // ── フッター削除：JSをHTMLに注入してブラウザ側で実行 ──
+  const footerKillerScript = `
+<script>
+(function(){
+  function removeFooters(){
+    // footerタグ
+    document.querySelectorAll('footer').forEach(function(el){el.remove();});
+    // class/idにfooterを含む要素
+    document.querySelectorAll('[class*="footer"],[id*="footer"]').forEach(function(el){el.remove();});
+    // テキストに著作権・クレジットを含む要素
+    var keywords = ['All Rights Reserved','chestlabo','SECURITY REPORT','PRODUCED BY','© 20'];
+    document.querySelectorAll('div,p,section,span').forEach(function(el){
+      if(el.children.length === 0){
+        var t = el.textContent;
+        if(keywords.some(function(k){return t.indexOf(k) >= 0;})){
+          var parent = el.parentElement;
+          if(parent) parent.remove(); else el.remove();
+        }
+      }
+    });
+  }
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', removeFooters);
+  } else {
+    removeFooters();
+  }
+})();
+</script>`;
+
+  // </body> の直前に注入
+  html = html.replace(/<\/body>/i, footerKillerScript + '\n</body>');
 
   return { html, isHtml: true };
 }
