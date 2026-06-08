@@ -699,6 +699,12 @@ async function callClaude(userMessage, model, apiKey, simpleMode = false, standa
       });
     });
     req.on('error', reject);
+    // Geminiレポート生成は最大5分かかるためタイムアウトを300秒に設定
+    req.setTimeout(300000, () => {
+      console.log('  ⚠ Gemini APIタイムアウト（300秒）');
+      req.destroy();
+      reject(new Error('Gemini APIタイムアウト（300秒）'));
+    });
     req.write(bodyStr);
     req.end();
   });
@@ -930,6 +936,11 @@ const server = http.createServer(async (req, res) => { // eslint-disable-line
   res.writeHead(404);
   res.end('Not Found');
 });
+
+  // Railwayの502対策：サーバータイムアウトを360秒に設定
+  server.setTimeout(360000);
+  server.keepAliveTimeout = 360000;
+  server.headersTimeout = 361000;
 
   server.listen(PORT, () => {
     // PIDファイルに自分のPIDを保存
