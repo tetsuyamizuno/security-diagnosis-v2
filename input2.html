@@ -556,6 +556,8 @@ runBtn.addEventListener('click', async () => {
     const jobId = startData.jobId;
 
     // STEP2: ポーリング（3秒ごとに結果を確認）
+    // 相対URLを使用することでRailway/ローカル問わず正しく動作する
+    const baseUrl = location.hostname.includes('railway.app') ? '' : getEndpointUrl();
     let elapsed = 0;
     const dots = ['', '.', '..', '...'];
     const data = await new Promise((resolve, reject) => {
@@ -563,7 +565,7 @@ runBtn.addEventListener('click', async () => {
         elapsed += 3;
         statusText.textContent = `AIがレポートを生成中です${dots[Math.floor(elapsed/3) % 4]} （${elapsed}秒経過）`;
         try {
-          const pollRes = await fetch(getEndpointUrl() + '/result/' + jobId);
+          const pollRes = await fetch(baseUrl + '/result/' + jobId);
           if (!pollRes.ok) { clearInterval(timer); reject(new Error(`ポーリングエラー: ${pollRes.status}`)); return; }
           const pollData = await pollRes.json();
           if (pollData.status === 'done') { clearInterval(timer); resolve(pollData); }
