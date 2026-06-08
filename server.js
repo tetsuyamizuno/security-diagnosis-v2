@@ -795,8 +795,8 @@ async function runDiagnosis(jobId, config) {
     const trimmed = finalReport.trimStart();
     const isHtml = trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html');
 
-    // ── スコア注入（standardMode2のみ） ──
-    if (isHtml && config.standardMode2) {
+    // ── スコア注入（standardMode2のみ・showScore:falseで無効化） ──
+    if (isHtml && config.standardMode2 && config.showScore !== false) {
       const hasScore = /健全性スコア|セキュリティスコア|score-section/i.test(finalReport);
       if (!hasScore) {
         const h = headers || '';

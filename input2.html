@@ -544,7 +544,8 @@ runBtn.addEventListener('click', async () => {
         model: document.getElementById('model').value,
         apiKey: apiKeyEl.value.trim(),
         simpleMode: false,
-        standardMode2: true
+        standardMode2: true,
+        showScore: false
       })
     });
     if (!startRes.ok) {
