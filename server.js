@@ -21,7 +21,6 @@ const { execSync } = require('child_process');
 
 const PORT     = process.env.PORT || 3001;
 const API_KEY  = process.env.ANTHROPIC_API_KEY;
-const PROMPT_PATH = path.join(__dirname, 'security-diagnosis-prompt.md');
 const PID_FILE = path.join(__dirname, 'server.pid');
 
 // ── stop コマンド ──────────────────────────────────────
@@ -66,10 +65,6 @@ if (fs.existsSync(PID_FILE)) {
 
 // ── 起動チェック ──────────────────────────────────────
 function checkRequirements() {
-  if (!fs.existsSync(PROMPT_PATH)) {
-    console.error('❌ security-diagnosis-prompt.md が見つかりません。同じフォルダに置いてください。');
-    process.exit(1);
-  }
   if (!API_KEY) {
     console.log('ℹ  ANTHROPIC_API_KEY 未設定 — ブラウザの入力欄からAPIキーを受け取ります。');
   }
