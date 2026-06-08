@@ -271,16 +271,7 @@ ${fetchedInfo}
 
 出力：<!DOCTYPE html>から始まる完全なHTMLのみ出力（マークダウン装飾不要）。Tailwind CSS(CDN)使用。
 
-【デザイン仕様】以下のテンプレートに厳密に従うこと：
-- body: class="bg-gray-100 text-gray-800"、font-family: Helvetica Neue
-- 全セクション: class="bg-white p-6 rounded-lg shadow-md mb-8"
-- ヘッダー: border-l-8 border-blue-600、タイトルtext-3xl font-bold、診断日・PDFボタン（no-printクラス）・青背景の注記ボックス
-- リスクカード: border-l-8 で高リスク=border-red-600・中リスク=border-yellow-500・低リスク=border-blue-500
-- リスクバッジ: 高=bg-red-100 text-red-800・中=bg-yellow-100 text-yellow-800・低=bg-blue-100 text-blue-800
-- 技術スタックの確認済みタグ: bg-green-100 text-green-800 rounded-full・推定タグ: bg-yellow-100 text-yellow-800 rounded-full
-- スコア表示: text-8xl font-bold（スコア値の色: 80以上=text-green-500・60〜79=text-yellow-500・40〜59=text-orange-500・39以下=text-red-600）
-- テーブル: thead bg-gray-50、行ごとにborder-b、overflow-x: auto でレスポンシブ対応
-- @media print { .no-print { display: none; } }
+【デザイン仕様】body=bg-gray-100、セクション=bg-white p-6 rounded-lg shadow-md、ヘッダー=border-l-8 border-blue-600、リスクカード=高:border-red-600/中:border-yellow-500/低:border-blue-500、スコア=text-8xl font-bold(色:80↑緑/60-79黄/40-59橙/39↓赤)、確認済みタグ=bg-green-100 rounded-full/推定=bg-yellow-100、テーブル=thead bg-gray-50 border-b、@media print{.no-print{display:none}}
 
 HTMLレポート構成：
 1. ヘッダー：「セキュリティ脆弱性診断レポート」・診断実施日・PDFとして保存ボタン・注記（OWASPベース外部診断・公的統計推計の旨）
@@ -307,22 +298,13 @@ HTMLレポート構成：
 
 出力：<!DOCTYPE html>から始まる完全なHTMLのみ出力（マークダウン装飾不要）。Tailwind CSS(CDN)使用。
 
-【デザイン仕様】以下のテンプレートに厳密に従うこと：
-- body: class="bg-gray-100 text-gray-800"、font-family: Helvetica Neue
-- 全セクション: class="bg-white p-6 rounded-lg shadow-md mb-8"
-- ヘッダー: border-l-8 border-blue-600、タイトルtext-3xl font-bold、診断日・PDFボタン（no-printクラス）・青背景の注記ボックス
-- リスクカード: border-l-8 で高リスク=border-red-600・中リスク=border-yellow-500・低リスク=border-blue-500
-- リスクバッジ: 高=bg-red-100 text-red-800・中=bg-yellow-100 text-yellow-800・低=bg-blue-100 text-blue-800
-- 技術スタックの確認済みタグ: bg-green-100 text-green-800 rounded-full・推定タグ: bg-yellow-100 text-yellow-800 rounded-full
-- スコア表示: text-8xl font-bold（スコア値の色: 80以上=text-green-500・60〜79=text-yellow-500・40〜59=text-orange-500・39以下=text-red-600）
-- テーブル: thead bg-gray-50、行ごとにborder-b、overflow-x: auto でレスポンシブ対応
-- @media print { .no-print { display: none; } }
+【デザイン仕様】body=bg-gray-100、セクション=bg-white p-6 rounded-lg shadow-md、ヘッダー=border-l-8 border-blue-600、リスクカード=高:border-red-600/中:border-yellow-500/低:border-blue-500、スコア=text-8xl font-bold(色:80↑緑/60-79黄/40-59橙/39↓赤)、確認済みタグ=bg-green-100 rounded-full/推定=bg-yellow-100、テーブル=thead bg-gray-50 border-b、@media print{.no-print{display:none}}
 
 HTMLレポート構成：
 1. ヘッダー：「セキュリティ脆弱性診断レポート」・診断実施日・PDFとして保存ボタン・注記（「本レポートは実HTTPリクエストによる公開情報に基づく教育・防御目的の整理です。実際の脆弱性の存在を示すものではありません。」・OWASPベース・公的統計推計の旨）
 2. 診断対象サマリー：URL・分析種別（教育目的）・サイト種別・推定技術スタック（確認済み/推定タグ）・HTTPヘッダー設定状況テーブル（ヘッダー名・✔設定済み or ✘未設定・目的）
 3. 総合リスク評価：スコア（text-8xl）・リスクレベルラベル・減点内訳（高×件・中×件・低×件・ヘッダー減点合計）・経営者向けコメント（黄背景ボックス）。スコア算出：高リスク−15点・中リスク−7点・低リスク−2点、ヘッダー未設定（X-Frame-Options−5点・X-Content-Type-Options−5点・CSP−5点・Referrer-Policy−3点・Permissions-Policy−3点・X-Powered-By情報開示−1点・Server情報開示−1点）、下限0点
-4. リスク類型一覧（高→中→低）：上位5件。各カードに①リスク類型説明（推測ベースと明示）②同業界の公開インシデント事例2つ（出典付き）③業界統計ベースの潜在的損害規模④一般的な原因⑤防御側（自社参考用）対応策（[最優先]タグ付き3つまで）
+4. リスク類型一覧（高→中→低）：上位5件。各カードに①リスク類型説明②同業界の公開インシデント事例2つ（出典付き）③業界統計ベースの潜在的損害規模④一般的な原因⑤防御側（自社参考用）対応策（[最優先]タグ付き3つまで）
 5. 推奨防御ロードマップ（テーブル）：リスク名・評価・優先度・推奨対応期限・中核対策
 6. 免責事項（他社サイトであることを明記・footerタグ・text-sm text-gray-500）`;
 
