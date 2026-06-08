@@ -335,8 +335,54 @@ ${headers || '（取得できませんでした。各ヘッダー項目は「未
 `.trim();
 }
 
-// ── HTMLを応答から抽出 ──────────────────────────────
-function extractHtml(report) {
+// ── スコア計算 ──────────────────────────────────────
+function calcScore(html, headersStr) {
+  // リスク件数カウント（生成されたHTMLから）
+  const highCount = (html.match(/高リスク/g) || []).length;
+  const midCount  = (html.match(/中リスク/g) || []).length;
+  const lowCount  = (html.match(/低リスク/g) || []).length;
+  // カバーのバッジ等で重複カウントされるため÷2で近似
+  const high = Math.max(0, Math.round(highCount / 2) - 1);
+  const mid  = Math.max(0, Math.round(midCount  / 2) - 1);
+  const low  = Math.max(0, Math.round(lowCount  / 2) - 1);
+
+  // ヘッダー減点
+  const h = headersStr || '';
+  let headerDeduct = 0;
+  if (!h.match(/content-security-policy/i))    headerDeduct += 5;
+  if (!h.match(/x-frame-options/i))             headerDeduct += 3;
+  if (!h.match(/x-content-type-options/i))      headerDeduct += 3;
+  if (!h.match(/referrer-policy/i))             headerDeduct += 3;
+  if (!h.match(/permissions-policy/i))          headerDeduct += 2;
+  if (h.match(/x-powered-by/i))                 headerDeduct += 1;
+  if (h.match(/^server:/im))                    headerDeduct += 1;
+
+  const score = Math.max(0, 100 - high*15 - mid*7 - low*2 - headerDeduct);
+  const level = score >= 80 ? '軽微なリスク' : score >= 60 ? '中程度のリスク' : score >= 40 ? '深刻なリスク' : '非常に危険';
+  const color = score >= 80 ? '#4CAF82' : score >= 60 ? '#E09F3E' : '#D64045';
+  const breakdown = `高リスク${high}件、中リスク${mid}件、低リスク${low}件、ヘッダー減点${headerDeduct}点`;
+
+  return { score, level, color, breakdown, high, mid, low };
+}
+
+// ── スコアHTMLブロック生成 ──────────────────────────
+function buildScoreHtml(score, level, color, breakdown) {
+  return `
+<section style="background:#fff;border-radius:10px;padding:32px 40px;margin:32px auto;max-width:960px;box-shadow:0 2px 12px rgba(0,0,0,.07);">
+  <h2 style="font-family:'Noto Serif JP',serif;font-size:1.3rem;color:#1E2A35;margin:0 0 8px;">セキュリティ健全性スコア</h2>
+  <p style="color:#555;font-size:.9rem;margin:0 0 20px;">公開情報から判断した本サイトのセキュリティ健全性評価です。</p>
+  <div style="background:#e8e8e8;border-radius:999px;height:40px;overflow:hidden;margin-bottom:12px;">
+    <div style="width:${score}%;background:${color};height:100%;border-radius:999px;display:flex;align-items:center;justify-content:flex-end;padding-right:18px;min-width:80px;">
+      <span style="color:#fff;font-weight:700;font-size:1.15rem;">${score} / 100 点</span>
+    </div>
+  </div>
+  <p style="color:#2D6A8F;font-size:.9rem;margin:0 0 6px;">※ 100点満点中${score}点。${breakdown}</p>
+  <p style="color:#666;font-size:.85rem;margin:0;">判定：<strong style="color:${color};">${level}</strong></p>
+</section>`;
+}
+
+// ── HTMLを応答から抽出・後処理 ──────────────────────
+function extractHtml(report, headersStr, simpleMode) {
   const doctypeIdx = report.search(/<!DOCTYPE/i);
   const htmlTagIdx = report.search(/<html[\s>]/i);
   const startIdx   = doctypeIdx >= 0 ? doctypeIdx : htmlTagIdx >= 0 ? htmlTagIdx : -1;
@@ -346,11 +392,33 @@ function extractHtml(report) {
   let html = report.slice(startIdx).trim().replace(/\s*```\s*$/, '');
   if (!/\/html>/i.test(html)) html += '\n</body>\n</html>';
 
-  // フッターを強制削除
+  // ── フッター完全削除 ──────────────────────────────
+  // <footer>タグ
   html = html.replace(/<footer[\s\S]*?<\/footer>/gi, '');
+  // footerクラス・id を持つ div/section
+  html = html.replace(/<(div|section|p)[^>]*(class|id)="[^"]*footer[^"]*"[\s\S]*?<\/\1>/gi, '');
+  // 著作権・クレジット文字列を含む要素
+  html = html.replace(/<[^>]+>\s*[©&copy;][\s\S]*?All Rights Reserved[\s\S]*?<\/[^>]+>/gi, '');
+  html = html.replace(/<[^>]+>\s*SECURITY REPORT[\s\S]*?<\/[^>]+>/gi, '');
+  // CSSでも非表示
+  html = html.replace('</style>', 'footer,div[class*="footer"],section[class*="footer"]{display:none!important}</style>');
 
-  // <style>内にfooter非表示CSSを注入（念のため）
-  html = html.replace('</style>', 'footer{display:none!important}</style>');
+  // ── スコアセクション注入（標準版のみ） ─────────────
+  if (!simpleMode) {
+    const hasScore = /score-section|健全性スコア|セキュリティスコア/i.test(html);
+    if (!hasScore) {
+      const { score, level, color, breakdown } = calcScore(html, headersStr);
+      const scoreHtml = buildScoreHtml(score, level, color, breakdown);
+      // 最初の </section> の直後に挿入
+      const insertAt = html.indexOf('</section>');
+      if (insertAt >= 0) {
+        html = html.slice(0, insertAt + 10) + scoreHtml + html.slice(insertAt + 10);
+      } else {
+        // </h1> or <body> 直後にフォールバック
+        html = html.replace(/<body[^>]*>/, m => m + scoreHtml);
+      }
+    }
+  }
 
   return { html, isHtml: true };
 }
@@ -400,7 +468,7 @@ export default {
         );
 
         // HTMLを抽出
-        const { html: finalReport, isHtml } = extractHtml(rawReport);
+        const { html: finalReport, isHtml } = extractHtml(rawReport, headersStr, config.simpleMode || false);
 
         return new Response(
           JSON.stringify({ report: finalReport, isHtml }),
