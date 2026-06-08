@@ -984,7 +984,7 @@ const server = http.createServer(async (req, res) => { // eslint-disable-line
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log(`  ポート  : ${PORT}`);
     console.log(`  PID     : ${process.pid}`);
-    console.log(`  プロンプト: ${PROMPT_PATH}`);
+    console.log(`  プロンプト: server.js 内蔵`);
     console.log('');
     console.log('  停止するには: node server.js stop');
     console.log('  1. input.html をブラウザで開く');
