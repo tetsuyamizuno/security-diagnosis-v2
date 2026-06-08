@@ -288,7 +288,7 @@ HTMLレポート構成：
 3. 総合リスク評価：スコア（text-8xl）・リスクレベルラベル・減点内訳（高×件・中×件・低×件・ヘッダー減点合計）・経営者向けコメント（黄背景ボックス）。スコア算出：高リスク−15点・中リスク−7点・低リスク−2点、ヘッダー未設定（X-Frame-Options−5点・X-Content-Type-Options−5点・CSP−5点・Referrer-Policy−3点・Permissions-Policy−3点・X-Powered-By情報開示−1点・Server情報開示−1点）、下限0点
 4. 確認されたリスクと対策（高→中→低）：OWASP Top 10:2025ベースで上位5件。各カードに①リスク説明と評価（確認済み/推定を太字明示）②実際の攻撃事例2つ（出典付き）③想定損害額④原因⑤推奨対応策（[最優先]タグ付き3つまで）
 5. 優先対応ロードマップ（テーブル）：リスク名・評価・優先度・推奨対応期限・中核対策
-6. 免責事項（footerタグ・text-sm text-gray-500）
+6. 免責事項（footerタグ・text-sm text-gray-500）`;
 
       const otherInstructions = `
 【重要制約】
@@ -324,7 +324,7 @@ HTMLレポート構成：
 3. 総合リスク評価：スコア（text-8xl）・リスクレベルラベル・減点内訳（高×件・中×件・低×件・ヘッダー減点合計）・経営者向けコメント（黄背景ボックス）。スコア算出：高リスク−15点・中リスク−7点・低リスク−2点、ヘッダー未設定（X-Frame-Options−5点・X-Content-Type-Options−5点・CSP−5点・Referrer-Policy−3点・Permissions-Policy−3点・X-Powered-By情報開示−1点・Server情報開示−1点）、下限0点
 4. リスク類型一覧（高→中→低）：上位5件。各カードに①リスク類型説明（推測ベースと明示）②同業界の公開インシデント事例2つ（出典付き）③業界統計ベースの潜在的損害規模④一般的な原因⑤防御側（自社参考用）対応策（[最優先]タグ付き3つまで）
 5. 推奨防御ロードマップ（テーブル）：リスク名・評価・優先度・推奨対応期限・中核対策
-6. 免責事項（他社サイトであることを明記・footerタグ・text-sm text-gray-500）
+6. 免責事項（他社サイトであることを明記・footerタグ・text-sm text-gray-500）`;
 
       return commonPrompt + (owner === 'own' ? ownInstructions : otherInstructions);
     }
