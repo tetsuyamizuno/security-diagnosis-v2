@@ -575,7 +575,7 @@ export default {
         );
 
         // HTMLを抽出
-        const { html: finalReport, isHtml } = extractHtml(rawReport, headersStr, config.simpleMode || config.standardMode2 || false);
+        const { html: finalReport, isHtml } = extractHtml(rawReport, headersStr, config.simpleMode || false);
 
         return new Response(
           JSON.stringify({ report: finalReport, isHtml }),
