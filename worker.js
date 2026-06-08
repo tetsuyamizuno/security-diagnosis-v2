@@ -331,8 +331,10 @@ ${headers || '（取得できませんでした。各ヘッダー項目は「未
 ⑥ 補足メモ「${config.notes || 'なし'}」の内容を踏まえてリスク優先度と損害額レンジを補正
 ⑦ 「確認済み」「推定」「未確認」の区別を確認してからレポートを出力
 
-必ずシステム指示のレポート形式（セクション1〜9）に従って出力してください。
+必ずシステム指示のレポート形式（セクション1〜10）に従って出力してください。
 専門用語の初出には必ず（）で注釈を付け、非専門家にも理解できる言葉で書いてください。
+
+【最重要】冒頭注記セクションの直後に、必ずスコアセクション（class="score-section"）をHTMLで出力してください。スコアセクションを省略した場合、レポートは不完全とみなされます。
 `.trim();
 }
 
@@ -346,6 +348,12 @@ function extractHtml(report) {
 
   let html = report.slice(startIdx).trim().replace(/\s*```\s*$/, '');
   if (!/\/html>/i.test(html)) html += '\n</body>\n</html>';
+
+  // フッターを強制削除
+  html = html.replace(/<footer[\s\S]*?<\/footer>/gi, '');
+
+  // <style>内にfooter非表示CSSを注入（念のため）
+  html = html.replace('</style>', 'footer{display:none!important}</style>');
 
   return { html, isHtml: true };
 }
