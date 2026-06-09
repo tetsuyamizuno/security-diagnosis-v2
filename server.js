@@ -779,10 +779,12 @@ async function runDiagnosis(jobId, config) {
       }
     }
 
-    // HTMLタグ間のテキストのみ◆系文字を除去
+    // HTMLタグ間のテキストのみ不要記号・文字化け文字を除去
     finalReport = finalReport.replace(/>([^<]+)</g, (match, text) => {
       const cleaned = text
-        .replace(/◆+/g, '').replace(/◇+/g, '').replace(/●+/g, '').replace(/■+/g, '')
+        .replace(/�+/g, '')   // Unicode置換文字（文字化け◆の正体）
+        .replace(/◆+/g, '').replace(/◇+/g, '')
+        .replace(/●+/g, '').replace(/■+/g, '')
         .replace(/▲+/g, '').replace(/▼+/g, '').replace(/★+/g, '').replace(/☆+/g, '');
       return `>${cleaned}<`;
     });
