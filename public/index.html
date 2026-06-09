@@ -603,10 +603,16 @@ HTMLレポート構成：
       if (!text) throw new Error('レスポンスが空です');
       const m = text.match(/```html\s*([\s\S]*?)\s*```/i);
       if (m) return m[1].trim();
-      const m2 = text.match(/(<!DOCTYPE html>[\s\S]*?<\/html>)/i);
+      const m2 = text.match(/(<!DOCTYPE html[\s\S]*?<\/html>)/i);
       if (m2) return m2[1].trim();
-      if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) return text.trim();
-      return null;
+      const m3 = text.match(/(<html[\s\S]*?<\/html>)/i);
+      if (m3) return m3[1].trim();
+      const t = text.trim();
+      if (t.startsWith('<!DOCTYPE') || t.startsWith('<html') || t.startsWith('<HTML')) return t;
+      // 前置き文がある場合: <!DOCTYPE or <html の出現位置から抽出
+      const idx = text.search(/<!DOCTYPE html|<html/i);
+      if (idx !== -1) return text.slice(idx).trim();
+      throw new Error('レスポンスにHTMLが含まれていません。モデルの出力: ' + text.slice(0, 200));
     }
 
     // ===== Report =====
